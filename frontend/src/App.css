@@ -1,0 +1,631 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  overflow: hidden; /* Prevents the whole page from scrolling */
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: white;
+}
+
+.dashboard-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* 1. MAP FILLS ENTIRE SCREEN */
+.map-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh !important;
+  z-index: 1;
+}
+
+/* 2. FLOATING HEADER */
+.floating-header {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.9);
+  padding: 15px 25px;
+  border-radius: 8px;
+  backdrop-filter: blur(5px);
+  border: 1px solid #334155;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.floating-header h1 {
+  margin: 0;
+  font-size: 26px;
+  color: #38bdf8;
+}
+
+.floating-header p {
+  margin: 5px 0 0 0;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+/* 3. SIDE PANEL */
+.side-panel {
+  position: absolute;
+  top: 0;
+  right: 0; 
+  width: 400px;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, 0.95);
+  z-index: 1005; /* HIGHEST LAYER: Covers everything when open on mobile */
+  display: flex;
+  flex-direction: column;
+  box-shadow: -5px 0 25px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  transition: transform 0.3s ease-in-out;
+  overflow-y: auto; /* Adds the scrollbar just to the panel */
+  overflow-x: hidden;
+}
+
+/* Slide it off-screen when collapsed */
+.side-panel.collapsed {
+  transform: translateX(100%); 
+}
+
+/* Custom Scrollbar for the Panel */
+.side-panel::-webkit-scrollbar { width: 6px; }
+.side-panel::-webkit-scrollbar-track { background: transparent; }
+.side-panel::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+
+.panel-content {
+  padding: 20px;
+  padding-top: 70px; /* Space for the toggle button */
+  padding-bottom: 120px; /* Space so the bottom slider doesn't block text */
+}
+
+/* 4. TOGGLE MENU BUTTON */
+.panel-toggle-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1006; /* Above the panel so you can always click it */
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: white;
+  width: 45px;
+  height: 45px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease-in-out;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.panel-toggle-btn:hover { background-color: #334155; }
+
+/* Move button dynamically when panel slides in/out */
+.side-panel:not(.collapsed) ~ .panel-toggle-btn,
+.panel-toggle-btn.panel-open {
+  right: 420px; /* Panel width (400) + 20px padding */
+}
+
+/* 5. DOWNLOAD TIMELAPSE MENU */
+.download-container {
+  position: absolute;
+  top: 20px;
+  right: 475px; /* 420px (panel width) + 45px (toggle width) + 10px spacing */
+  z-index: 1006;
+}
+
+.download-btn {
+  background-color: #1e293b;
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  height: 45px;
+  padding: 0 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s;
+}
+
+.download-btn:hover {
+  background-color: #38bdf8;
+  color: #0f172a;
+}
+
+.download-dropdown {
+  position: absolute;
+  top: 55px;
+  right: 0;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.download-dropdown p {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0 0 10px 0;
+  text-transform: uppercase;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 5px;
+}
+
+.download-dropdown a {
+  color: #e2e8f0;
+  text-decoration: none;
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.download-dropdown a:hover {
+  background: #334155;
+  color: white;
+}
+
+/* Card Styling */
+.stats-grid { display: flex; flex-direction: column; gap: 15px; }
+.stat-card { background: rgba(30, 41, 59, 0.8); padding: 15px; border-radius: 8px; border: 1px solid #334155; text-align: center; }
+.stat-card h4 { margin: 0 0 10px 0; color: #94a3b8; font-size: 12px; text-transform: uppercase; }
+.stat-card p { margin: 0; font-size: 24px; font-weight: bold; }
+.trend-up { color: #ef4444; }
+.trend-down { color: #22c55e; }
+
+/* 6. FLOATING BOTTOM BAR (Year Slider) */
+.floating-bottom-bar {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1006; /* High layer so it sits above the side panel padding */
+  background: rgba(15, 23, 42, 0.9);
+  padding: 15px 30px;
+  border-radius: 12px;
+  backdrop-filter: blur(5px);
+  border: 1px solid #334155;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  width: 400px;
+  max-width: 90vw; /* Ensures it shrinks perfectly on mobile */
+  text-align: center;
+}
+
+.floating-bottom-bar h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #38bdf8;
+}
+
+.year-slider {
+  width: 100%;
+  cursor: pointer;
+}
+
+/* 7. PUSH MAP CONTROLS UP */
+/* This stops the standard Leaflet map buttons from hiding behind your slider */
+.leaflet-bottom {
+  bottom: 100px !important;
+}
+
+/* 8. LOADING SPINNER */
+.loader-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  text-align: center;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px dashed #475569;
+  padding: 20px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(56, 189, 248, 0.2);
+  border-top: 4px solid #38bdf8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 9. MAP LEGEND (Locked to Top Left under Header) */
+.map-legend {
+  position: absolute;
+  top: 120px; /* Sits cleanly below the header */
+  left: 20px;
+  z-index: 1000; /* Layered below the side panel */
+  background: rgba(15, 23, 42, 0.9);
+  padding: 15px;
+  border-radius: 8px;
+  backdrop-filter: blur(5px);
+  border: 1px solid #334155;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+  width: 200px;
+}
+
+.map-legend h4 {
+  margin: 0 0 10px 0;
+  color: #38bdf8;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #e2e8f0;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  margin-right: 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.gradient-block {
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 12px;
+  margin-bottom: 2px;
+}
+
+.gradient-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 3px;
+  margin: 5px 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* These colors perfectly match your Google Earth Engine visualizer parameters! */
+.ndvi-gradient {
+  background: linear-gradient(to right, #ffffff, #ce7e45, #fcd163, #66a000, #004c00);
+}
+
+.slope-gradient {
+  background: linear-gradient(to right, #ffffff, #ffeaa7, #fab1a0, #ff7675, #d63031);
+}
+
+.gradient-labels {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* --- MOBILE RESPONSIVENESS FIX --- */
+@media (max-width: 768px) {
+  /* 1. Make the panel fit the phone screen instead of overflowing */
+  .side-panel {
+    width: 100vw;
+  }
+  
+  /* 2. Stop the button from flying off the screen! Keep it on top of the panel */
+  .side-panel:not(.collapsed) ~ .panel-toggle-btn,
+  .panel-toggle-btn.panel-open {
+    right: 20px; 
+  }
+  
+  /* 3. Move download button to track the toggle on mobile */
+  .download-container {
+    right: 75px; /* 20px (toggle pos) + 45px (toggle width) + 10px spacing */
+  }
+
+  /* 4. Shrink the GeoDrishti title slightly so it doesn't bump into the button */
+  .floating-header {
+    top: 15px;
+    left: 15px;
+    padding: 10px 15px;
+    max-width: 65vw;
+  }
+  
+  .floating-header h1 {
+    font-size: 20px;
+  }
+  
+  .floating-header p {
+    font-size: 11px;
+  }
+
+  /* 5. Ensure bottom bar fits nicely on phone */
+  .floating-bottom-bar {
+    bottom: 20px;
+    padding: 10px 20px;
+  }
+
+  /* 6. Push Leaflet controls a bit higher on mobile */
+  .leaflet-bottom {
+    bottom: 90px !important;
+  }
+
+  /* 7. Mobile Legend Fix: Sit on the left right under header, beneath Side Panel */
+  .map-legend {
+    top: 90px;
+    left: 15px;
+    width: 180px;
+    padding: 10px;
+    font-size: 11px;
+  }
+}
+
+/* ==========================================
+   AGENT CHAT DRAWER STYLES
+   ========================================== */
+.agent-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 380px;
+  height: 100vh;
+  background-color: rgba(15, 23, 42, 0.95);
+  z-index: 1005;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 5px 0 25px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  transition: transform 0.3s ease-in-out;
+  border-right: 1px solid #334155;
+  overflow: hidden;
+}
+
+.agent-drawer.collapsed {
+  transform: translateX(-100%);
+}
+
+.agent-drawer-toggle-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 1006;
+  background-color: #1e293b;
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  padding: 0 15px;
+  height: 45px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease-in-out;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.agent-drawer-toggle-btn:hover {
+  background-color: #38bdf8;
+  color: #0f172a;
+}
+
+.agent-drawer-toggle-btn.drawer-open {
+  left: 400px;
+}
+
+.floating-header.shifted, .map-legend.shifted {
+  left: 400px;
+}
+
+.agent-drawer-header {
+  padding: 20px;
+  padding-top: 80px;
+  border-bottom: 1px solid #334155;
+}
+
+.agent-drawer-header h2 {
+  font-size: 18px;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.agent-drawer-header p {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 4px 0 0 0;
+}
+
+.agent-chat-messages {
+  flex: 1;
+  padding: 15px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-chat-messages::-webkit-scrollbar { width: 4px; }
+.agent-chat-messages::-webkit-scrollbar-track { background: transparent; }
+.agent-chat-messages::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+
+.chat-message {
+  padding: 10px 12px;
+  border-radius: 8px;
+  max-width: 85%;
+  font-size: 13px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.chat-message.user {
+  background-color: #0284c7;
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+}
+
+.chat-message.agent {
+  background-color: #1e293b;
+  color: #f1f5f9;
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+  border: 1px solid #334155;
+}
+
+.chat-message.system-error {
+  background-color: #7f1d1d;
+  color: #fca5a5;
+  align-self: center;
+  border: 1px solid #b91c1c;
+  max-width: 95%;
+  font-size: 12px;
+}
+
+.agent-chat-input-area {
+  padding: 15px;
+  border-top: 1px solid #334155;
+  background-color: #0f172a;
+}
+
+.quick-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.quick-prompt-btn {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  padding: 5px 10px;
+  border-radius: 15px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-prompt-btn:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.chat-input-form {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-text-input {
+  flex: 1;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: white;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.chat-text-input:focus {
+  outline: none;
+  border-color: #38bdf8;
+}
+
+.chat-send-btn {
+  background-color: #38bdf8;
+  color: #0f172a;
+  border: none;
+  border-radius: 6px;
+  padding: 0 15px;
+  font-weight: bold;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.chat-send-btn:hover {
+  background-color: #0ea5e9;
+}
+
+.chat-send-btn:disabled {
+  background-color: #475569;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.chat-loading-spinner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  color: #38bdf8;
+  font-size: 12px;
+  align-self: flex-start;
+}
+
+.chat-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(56, 189, 248, 0.2);
+  border-top: 2px solid #38bdf8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.gis-params-tag {
+  background: rgba(56, 189, 248, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  padding: 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: #38bdf8;
+}
+
+.findings-list {
+  margin-top: 8px;
+  padding-left: 15px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.findings-list li {
+  margin-bottom: 4px;
+}
+
+@media (max-width: 768px) {
+  .agent-drawer {
+    width: 100vw;
+  }
+  .agent-drawer-toggle-btn.drawer-open {
+    left: 20px;
+  }
+  .floating-header.shifted, .map-legend.shifted {
+    left: 15px;
+  }
+}

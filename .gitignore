@@ -1,0 +1,36 @@
+# Virtual environments
+venv/
+.venv/
+
+# Node packages
+node_modules/
+**/node_modules/
+
+# Python cache & compiled files
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Secrets and environment configurations
+.env
+.env.local
+.env.*.local
+
+# Django Database
+db.sqlite3
+backend/db.sqlite3
+
+# Frontend build directories
+frontend/dist/
+frontend/build/
+dist/
+build/
+
+# Local scratch, IDE, and log files
+scratch/
+*.log
+.vscode/
+.idea/
+.DS_Store
