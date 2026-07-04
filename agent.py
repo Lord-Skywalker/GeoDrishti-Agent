@@ -46,10 +46,13 @@ class GISParams(BaseModel):
     """Pydantic model representing structured query parameters parsed by Agent A."""
     start_date: str = Field(description="The start date in YYYY-MM-DD format (available range: 2018-01-01 to 2026-12-31).")
     end_date: str = Field(description="The end date in YYYY-MM-DD format (available range: 2018-01-01 to 2026-12-31).")
-    latitude_min: float = Field(description="Minimum latitude bounding box boundary (Majuli: ~26.80).")
-    latitude_max: float = Field(description="Maximum latitude bounding box boundary (Majuli: ~27.15).")
-    longitude_min: float = Field(description="Minimum longitude bounding box boundary (Majuli: ~93.90).")
-    longitude_max: float = Field(description="Maximum longitude bounding box boundary (Majuli: ~94.60).")
+    latitude_min: float = Field(description="Minimum latitude bounding box boundary.")
+    latitude_max: float = Field(description="Maximum latitude bounding box boundary.")
+    longitude_min: float = Field(description="Minimum longitude bounding box boundary.")
+    longitude_max: float = Field(description="Maximum longitude bounding box boundary.")
+    resolved_latitude: float = Field(description="Resolved latitude point of interest for the queried location.")
+    resolved_longitude: float = Field(description="Resolved longitude point of interest for the queried location.")
+    location_name: str = Field(description="Name of the city, region, or location queried.")
     indices: List[str] = Field(description="Remote-sensing indices requested, e.g. ['NDVI', 'NDWI', 'Erosion', 'Slope'].")
 
 
@@ -158,7 +161,12 @@ gis_operator = LlmAgent(
     instruction=(
         "You are a GIS Operator agent. Your task is to extract structured geospatial query parameters "
         "from the user's natural language request. You must output a JSON conforming to the GISParams schema. "
+        "If the user specifies any global city, region, or location, you MUST use your internal knowledge to resolve the exact "
+        "representative latitude and longitude coordinates (`resolved_latitude` and `resolved_longitude`), "
+        "as well as a small surrounding bounding box (`latitude_min`/`latitude_max` and `longitude_min`/`longitude_max` with a +/- 0.05 margin). "
+        "Set `location_name` to the resolved city/region name. "
         "Default bounding box for Majuli Island if unspecified: min_lat=26.80, max_lat=27.15, min_lon=93.90, max_lon=94.60. "
+        "In that case, `resolved_latitude` should be 26.95, `resolved_longitude` should be 94.28, and `location_name` should be 'Majuli Island'. "
         "Default date range if unspecified: start_date='2018-01-01', end_date='2025-12-31'."
     ),
     output_schema=GISParams,
@@ -175,7 +183,7 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
     """Security Guardrail & Data Retrieval:
     1. Bounds-checks coordinates and dates to prevent malformed queries from reaching backend.
     2. Caps query scope (max 5 years temporal range) to avoid backend loop exhaustions.
-    3. Spawns MCP server client to query stats and config.
+    3. Spawns MCP server client to query stats, config, and live GEE satellite metrics.
     """
     gis_dict = ctx.state.get("gis_params")
     if not gis_dict:
@@ -231,19 +239,16 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
     else:
         notes = ""
 
-    # 2. Coordinate Bounding Box checks (Majuli Island geographic bounds + safe margin)
-    lat_min, lat_max = 26.70, 27.20
-    lon_min, lon_max = 93.80, 94.70
-
-    if not (lat_min <= gis_params.latitude_min <= lat_max) or not (lat_min <= gis_params.latitude_max <= lat_max):
-        error_msg = f"Latitude coordinates out of Majuli bounds (must be between {lat_min} and {lat_max})."
+    # 2. Coordinate Range checks (validate global latitude and longitude boundaries)
+    if not (-90.0 <= gis_params.latitude_min <= 90.0) or not (-90.0 <= gis_params.latitude_max <= 90.0) or not (-90.0 <= gis_params.resolved_latitude <= 90.0):
+        error_msg = "Latitude coordinates must be between -90.0 and 90.0."
         return Event(
             output=error_msg,
             actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
         )
 
-    if not (lon_min <= gis_params.longitude_min <= lon_max) or not (lon_min <= gis_params.longitude_max <= lon_max):
-        error_msg = f"Longitude coordinates out of Majuli bounds (must be between {lon_min} and {lon_max})."
+    if not (-180.0 <= gis_params.longitude_min <= 180.0) or not (-180.0 <= gis_params.longitude_max <= 180.0) or not (-180.0 <= gis_params.resolved_longitude <= 180.0):
+        error_msg = "Longitude coordinates must be between -180.0 and 180.0."
         return Event(
             output=error_msg,
             actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
@@ -260,7 +265,7 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    python_exe = sys.executable or r"D:\agy2-projects\Geodrishti-geospatial-agent\.venv\Scripts\python.exe"
+    python_exe = sys.executable 
     mcp_script = os.path.join(os.path.dirname(__file__), "mcp_server.py")
     
     server_params = StdioServerParameters(
@@ -278,18 +283,34 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
                 gis_config_res = await session.call_tool("get_gis_config", arguments={})
                 gis_config = json.loads(gis_config_res.content[0].text)
 
-                # Fetch erosion statistics from MCP server
-                stats_res = await session.call_tool("get_erosion_stats", arguments={})
-                stats_list = json.loads(stats_res.content[0].text)
+                # Fetch live satellite metrics from Earth Engine
+                gee_res = await session.call_tool(
+                    "get_gee_satellite_metrics",
+                    arguments={
+                        "latitude": gis_params.resolved_latitude,
+                        "longitude": gis_params.resolved_longitude
+                    }
+                )
+                gee_metrics = json.loads(gee_res.content[0].text)
 
-                # Filter metrics by temporal bounds of query
-                start_year = start_dt.year
-                end_year = end_dt.year
-                filtered_stats = [item for item in stats_list if start_year <= item.get("year", 0) <= end_year]
+                # Check if location_name contains 'Majuli' (case-insensitive)
+                is_majuli = "majuli" in (gis_params.location_name or "").lower()
+
+                if is_majuli:
+                    # Fetch erosion statistics from MCP server
+                    stats_res = await session.call_tool("get_erosion_stats", arguments={})
+                    stats_list = json.loads(stats_res.content[0].text)
+                    # Filter metrics by temporal bounds of query
+                    start_year = start_dt.year
+                    end_year = end_dt.year
+                    filtered_stats = [item for item in stats_list if start_year <= item.get("year", 0) <= end_year]
+                else:
+                    filtered_stats = "Historical database tracking is localized only to Majuli Island."
 
                 payload = {
                     "gis_config": gis_config,
                     "historical_erosion_stats": filtered_stats,
+                    "live_gee_satellite_metrics": gee_metrics,
                     "clamped_query_bounds": {
                         "start_date": gis_params.start_date,
                         "end_date": gis_params.end_date,
@@ -297,6 +318,9 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
                         "latitude_max": gis_params.latitude_max,
                         "longitude_min": gis_params.longitude_min,
                         "longitude_max": gis_params.longitude_max,
+                        "resolved_latitude": gis_params.resolved_latitude,
+                        "resolved_longitude": gis_params.resolved_longitude,
+                        "location_name": gis_params.location_name,
                         "indices": gis_params.indices
                     }
                 }
@@ -345,8 +369,15 @@ environmental_analyst = LlmAgent(
     ),
     instruction=(
         "You are an Environmental Analyst agent. Your task is to review the JSON data payload containing "
-        "regional metrics and historical erosion stats, detect anomalies (like sudden erosion hikes), "
-        "assess risk severity, outline findings, and produce a formal risk report conforming to the RiskReport schema."
+        "regional/global metrics, historical stats, and live Google Earth Engine satellite metrics (NDVI/NDWI) if available. "
+        "The user may request analysis for ANY global location (specified in 'location_name' and coordinates in the payload). "
+        "Do NOT report a mismatch or coordinate shift if the coordinates are global and match the requested 'location_name'. "
+        "If historical erosion stats are empty or indicate they are localized to Majuli, ignore them completely. "
+        "Base your entire Risk Report and findings purely on the live GEE satellite metrics for the requested location, "
+        "and explicitly note in the report that historical data is not available outside of Majuli Island. "
+        "Review the metrics, detect anomalies (like low/high NDVI/NDWI values for that specific location), "
+        "assess risk severity, outline findings (including referencing the live GEE metrics: NDVI, NDWI, date, and cloud cover), "
+        "and produce a formal risk report conforming to the RiskReport schema for that location."
     ),
     output_schema=RiskReport,
     output_key="risk_report",

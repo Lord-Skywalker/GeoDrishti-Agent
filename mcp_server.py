@@ -61,5 +61,70 @@ def get_gis_config() -> str:
     }
     return json.dumps(config)
 
+@mcp.tool()
+def get_gee_satellite_metrics(latitude: float, longitude: float) -> str:
+    """Retrieve live satellite metrics (NDWI, NDVI) from Google Earth Engine (GEE)
+    for the specified latitude and longitude coordinates.
+    """
+    import ee
+    import json
+    from google.oauth2 import service_account
+    
+    try:
+        # Resolve credential path relative to this file's directory
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        creds_path = os.path.join(base_dir, "gee-credentials.json")
+        
+        # Load credentials
+        creds = service_account.Credentials.from_service_account_file(
+            creds_path,
+            scopes=["https://www.googleapis.com/auth/earthengine"]
+        )
+        ee.Initialize(creds)
+        
+        point = ee.Geometry.Point(longitude, latitude)
+        
+        # Load Sentinel-2 harmonized dataset
+        collection = (ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+                      .filterBounds(point)
+                      .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+                      .sort('system:time_start', False))
+        
+        # Check size
+        if collection.size().getInfo() == 0:
+            return json.dumps({"error": f"No cloud-free Sentinel-2 imagery found at lat={latitude}, lon={longitude}."})
+            
+        image = collection.first()
+        
+        # Calculate indices
+        ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
+        ndwi = image.normalizedDifference(['B3', 'B8']).rename('NDWI')
+        
+        combined = image.addBands([ndvi, ndwi])
+        
+        # Sample the point (scale=30m)
+        sampled = combined.select(['NDVI', 'NDWI']).sample(point, 30).first().getInfo()
+        
+        # Get metadata
+        date_str = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd').getInfo()
+        cloud_pct = image.get('CLOUDY_PIXEL_PERCENTAGE').getInfo()
+        
+        # Extract features
+        properties = sampled.get('properties', {}) if sampled else {}
+        ndvi_val = properties.get('NDVI', None)
+        ndwi_val = properties.get('NDWI', None)
+        
+        res = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "date": date_str,
+            "cloud_cover_percentage": cloud_pct,
+            "NDVI": ndvi_val,
+            "NDWI": ndwi_val
+        }
+        return json.dumps(res)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

@@ -408,7 +408,7 @@ body {
 
 .agent-drawer-toggle-btn {
   position: absolute;
-  top: 20px;
+  top: 365px;
   left: 20px;
   z-index: 1006;
   background-color: #1e293b;
@@ -434,6 +434,7 @@ body {
 
 .agent-drawer-toggle-btn.drawer-open {
   left: 400px;
+  top: 365px;
 }
 
 .floating-header.shifted, .map-legend.shifted {

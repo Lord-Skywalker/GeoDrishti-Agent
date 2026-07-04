@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, GeoJSON, ImageOverlay, LayersControl, ScaleControl, Marker, Popup, FeatureGroup } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, ImageOverlay, LayersControl, ScaleControl, Marker, Popup, FeatureGroup, useMap } from 'react-leaflet';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import 'leaflet/dist/leaflet.css'; 
 import './App.css';
@@ -16,7 +16,16 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   shadowUrl: markerShadow,
 });
-// --------------------------------
+// Helper component to handle flying to a new location in Leaflet
+function ChangeView({ center, zoom }) {
+  const map = useMap();
+  useEffect(() => {
+    if (center) {
+      map.flyTo(center, zoom || 11);
+    }
+  }, [center, zoom, map]);
+  return null;
+}
 
 function App() {
   const [selectedYear, setSelectedYear] = useState(2022);
@@ -41,6 +50,9 @@ function App() {
   const [isChatLoading, setIsChatLoading] = useState(false);
 
   const majuliPosition = [26.95, 94.28];
+  const [mapCenter, setMapCenter] = useState(majuliPosition);
+  const [mapZoom, setMapZoom] = useState(11);
+  const [customMarker, setCustomMarker] = useState(null);
   const majuliBounds = [[26.80, 93.90], [27.15, 94.60]]; 
 
   const landmarks = [
@@ -116,6 +128,26 @@ function App() {
               setSelectedYear(endYear);
             }
           }
+
+          // Fly map container to the new location coordinates dynamically
+          if (data.gis_params) {
+            let lat = data.gis_params.resolved_latitude;
+            let lon = data.gis_params.resolved_longitude;
+            if (lat === undefined || lon === undefined || lat === null || lon === null) {
+              if (data.gis_params.latitude_min !== undefined && data.gis_params.latitude_max !== undefined) {
+                lat = (data.gis_params.latitude_min + data.gis_params.latitude_max) / 2;
+                lon = (data.gis_params.longitude_min + data.gis_params.longitude_max) / 2;
+              }
+            }
+            if (lat !== undefined && lon !== undefined && lat !== null && lon !== null && !isNaN(lat) && !isNaN(lon)) {
+              setMapCenter([lat, lon]);
+              setMapZoom(11);
+              setCustomMarker({
+                position: [lat, lon],
+                name: data.gis_params.location_name || "Queried Location"
+              });
+            }
+          }
         } else {
           setMessages(prev => [...prev, {
             sender: 'agent',
@@ -183,7 +215,8 @@ function App() {
   return (
     <div className="dashboard-container">
       
-      <MapContainer center={majuliPosition} zoom={11} className="map-container" zoomControl={false}>
+      <MapContainer center={mapCenter} zoom={mapZoom} className="map-container" zoomControl={false}>
+        <ChangeView center={mapCenter} zoom={mapZoom} />
         <LayersControl position="bottomleft">
           
           <LayersControl.BaseLayer checked name="Satellite Imagery">
@@ -226,6 +259,16 @@ function App() {
           </Marker>
         ))}
 
+        {customMarker && (
+          <Marker position={customMarker.position}>
+            <Popup>
+              <strong>{customMarker.name}</strong><br/>
+              Latitude: {customMarker.position[0].toFixed(4)}<br/>
+              Longitude: {customMarker.position[1].toFixed(4)}
+            </Popup>
+          </Marker>
+        )}
+
         <ScaleControl position="bottomleft" imperial={false} />
       </MapContainer>
 
@@ -250,8 +293,16 @@ function App() {
                 <div className="gis-params-tag">
                   <strong>Parsed Parameters:</strong><br/>
                   • Range: {m.gisParams.start_date} to {m.gisParams.end_date}<br/>
-                  • BBox: Lat [{m.gisParams.latitude_min.toFixed(2)}, {m.gisParams.latitude_max.toFixed(2)}] | Lon [{m.gisParams.longitude_min.toFixed(2)}, {m.gisParams.longitude_max.toFixed(2)}]<br/>
-                  • Indices: {m.gisParams.indices.join(', ')}
+                  {m.gisParams.location_name && (
+                    <>• Location: {m.gisParams.location_name}<br/></>
+                  )}
+                  {m.gisParams.resolved_latitude !== undefined && m.gisParams.resolved_latitude !== null && (
+                    <>• Coordinates: {m.gisParams.resolved_latitude.toFixed(4)}, {m.gisParams.resolved_longitude.toFixed(4)}<br/></>
+                  )}
+                  {m.gisParams.latitude_min !== undefined && m.gisParams.latitude_min !== null && (
+                    <>• BBox: Lat [{m.gisParams.latitude_min.toFixed(2)}, {m.gisParams.latitude_max.toFixed(2)}] | Lon [{m.gisParams.longitude_min.toFixed(2)}, {m.gisParams.longitude_max.toFixed(2)}]<br/></>
+                  )}
+                  • Indices: {m.gisParams.indices ? m.gisParams.indices.join(', ') : 'None'}
                 </div>
               )}
               <div>{m.text}</div>
