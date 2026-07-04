@@ -39,18 +39,24 @@ body {
   backdrop-filter: blur(5px);
   border: 1px solid #334155;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .floating-header h1 {
   margin: 0;
-  font-size: 26px;
+  font-size: 24px;
   color: #38bdf8;
 }
 
-.floating-header p {
-  margin: 5px 0 0 0;
-  font-size: 13px;
-  color: #94a3b8;
+.floating-header .header-subtitle {
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 400;
+  opacity: 0.85;
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+  padding-left: 12px;
 }
 
 /* 3. SIDE PANEL */
@@ -357,7 +363,7 @@ body {
     font-size: 20px;
   }
   
-  .floating-header p {
+  .floating-header .header-subtitle {
     font-size: 11px;
   }
 
@@ -629,4 +635,25 @@ body {
   .floating-header.shifted, .map-legend.shifted {
     left: 15px;
   }
+}
+
+.global-context-banner {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(56, 189, 248, 0.2);
+  max-width: 800px;
+  width: 90%;
+  text-align: center;
+  font-size: 13px;
+  z-index: 1000;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-family: inherit;
+  line-height: 1.5;
 }

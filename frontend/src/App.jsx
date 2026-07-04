@@ -53,6 +53,8 @@ function App() {
   const [mapCenter, setMapCenter] = useState(majuliPosition);
   const [mapZoom, setMapZoom] = useState(11);
   const [customMarker, setCustomMarker] = useState(null);
+  const [currentLocation, setCurrentLocation] = useState('Majuli Island');
+  const [liveMetrics, setLiveMetrics] = useState(null);
   const majuliBounds = [[26.80, 93.90], [27.15, 94.60]]; 
 
   const landmarks = [
@@ -120,6 +122,27 @@ function App() {
             findings: report.findings,
             gisParams: data.gis_params
           }]);
+
+          if (data.gis_params && data.gis_params.location_name) {
+            setCurrentLocation(data.gis_params.location_name);
+          }
+
+          let liveMetricsData = null;
+          if (data.live_gee_satellite_metrics) {
+            liveMetricsData = data.live_gee_satellite_metrics;
+          } else if (data.mcp_payload) {
+            try {
+              const parsedMcp = JSON.parse(data.mcp_payload);
+              if (parsedMcp && parsedMcp.live_gee_satellite_metrics) {
+                liveMetricsData = parsedMcp.live_gee_satellite_metrics;
+              }
+            } catch (e) {
+              console.error("Error parsing mcp_payload", e);
+            }
+          }
+          if (liveMetricsData) {
+            setLiveMetrics(liveMetricsData);
+          }
 
           // Dynamic Insight Loop: Automatically switch year to matching endpoint temporal boundary
           if (data.gis_params && data.gis_params.end_date) {
@@ -227,29 +250,33 @@ function App() {
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap" />
           </LayersControl.BaseLayer>
 
-          <LayersControl.Overlay checked name="High Erosion Risk (Red)">
-            <FeatureGroup>
-              {realErosionShapes && (
-                <GeoJSON key={`erosion-${selectedYear}`} data={realErosionShapes} style={erosionStyle} onEachFeature={(f, l) => l.bindPopup(`Erosion Risk (${selectedYear})`)} />
-              )}
-            </FeatureGroup>
-          </LayersControl.Overlay>
+          {currentLocation.toLowerCase().includes('majuli') ? (
+            <>
+              <LayersControl.Overlay checked name="High Erosion Risk (Red)">
+                <FeatureGroup>
+                  {realErosionShapes && (
+                    <GeoJSON key={`erosion-${selectedYear}`} data={realErosionShapes} style={erosionStyle} onEachFeature={(f, l) => l.bindPopup(`Erosion Risk (${selectedYear})`)} />
+                  )}
+                </FeatureGroup>
+              </LayersControl.Overlay>
 
-          <LayersControl.Overlay name="Monsoon Flood Inundation (Blue)">
-            <FeatureGroup>
-              {floodShapes && (
-                <GeoJSON key={`flood-${selectedYear}`} data={floodShapes} style={floodStyle} onEachFeature={(f, l) => l.bindPopup(`Flood Zone (${selectedYear})`)} />
-              )}
-            </FeatureGroup>
-          </LayersControl.Overlay>
+              <LayersControl.Overlay name="Monsoon Flood Inundation (Blue)">
+                <FeatureGroup>
+                  {floodShapes && (
+                    <GeoJSON key={`flood-${selectedYear}`} data={floodShapes} style={floodStyle} onEachFeature={(f, l) => l.bindPopup(`Flood Zone (${selectedYear})`)} />
+                  )}
+                </FeatureGroup>
+              </LayersControl.Overlay>
 
-          <LayersControl.Overlay name="NDVI Vegetation Loss (Raster)">
-            <ImageOverlay url={`/ndvi_${selectedYear}.png`} bounds={majuliBounds} opacity={0.6} zIndex={10} />
-          </LayersControl.Overlay>
+              <LayersControl.Overlay name="NDVI Vegetation Loss (Raster)">
+                <ImageOverlay url={`/ndvi_${selectedYear}.png`} bounds={majuliBounds} opacity={0.6} zIndex={10} />
+              </LayersControl.Overlay>
 
-          <LayersControl.Overlay name="DEM Slope Topography (Raster)">
-            <ImageOverlay url="/slope_map.png" bounds={majuliBounds} opacity={0.6} zIndex={9} />
-          </LayersControl.Overlay>
+              <LayersControl.Overlay name="DEM Slope Topography (Raster)">
+                <ImageOverlay url="/slope_map.png" bounds={majuliBounds} opacity={0.6} zIndex={9} />
+              </LayersControl.Overlay>
+            </>
+          ) : null}
 
         </LayersControl>
 
@@ -343,41 +370,43 @@ function App() {
       {/* FLOATING HEADER */}
       <div className={`floating-header ${isAgentDrawerOpen ? 'shifted' : ''}`}>
         <h1>GeoDrishti</h1>
-        <p>NIT Silchar Research | Majuli Island</p>
+        <span className="header-subtitle">NIT Silchar Research | Anubhav_2315094 | {currentLocation}</span>
       </div>
 
       {/* STATIC MAP LEGEND */}
-      <div className={`map-legend ${isAgentDrawerOpen ? 'shifted' : ''}`}>
-        <h4>Map Legend</h4>
-        
-        <div className="legend-item">
-          <span className="legend-color" style={{ background: '#ff0000', opacity: 0.5 }}></span>
-          <span>Erosion Risk Area</span>
-        </div>
-        
-        <div className="legend-item">
-          <span className="legend-color" style={{ background: '#2563eb', opacity: 0.4 }}></span>
-          <span>Monsoon Flood Zone</span>
-        </div>
- 
-        <div className="legend-item gradient-block">
-          <span>NDVI (Vegetation Cover)</span>
-          <div className="gradient-bar ndvi-gradient"></div>
-          <div className="gradient-labels">
-            <span>Water/Bare</span>
-            <span>Dense Forest</span>
+      {currentLocation.toLowerCase().includes('majuli') && (
+        <div className={`map-legend ${isAgentDrawerOpen ? 'shifted' : ''}`}>
+          <h4>Map Legend</h4>
+          
+          <div className="legend-item">
+            <span className="legend-color" style={{ background: '#ff0000', opacity: 0.5 }}></span>
+            <span>Erosion Risk Area</span>
+          </div>
+          
+          <div className="legend-item">
+            <span className="legend-color" style={{ background: '#2563eb', opacity: 0.4 }}></span>
+            <span>Monsoon Flood Zone</span>
+          </div>
+   
+          <div className="legend-item gradient-block">
+            <span>NDVI (Vegetation Cover)</span>
+            <div className="gradient-bar ndvi-gradient"></div>
+            <div className="gradient-labels">
+              <span>Water/Bare</span>
+              <span>Dense Forest</span>
+            </div>
+          </div>
+   
+          <div className="legend-item gradient-block">
+            <span>Terrain Slope (DEM)</span>
+            <div className="gradient-bar slope-gradient"></div>
+            <div className="gradient-labels">
+              <span>Flat (0°)</span>
+              <span>Steep (&gt;10°)</span>
+            </div>
           </div>
         </div>
- 
-        <div className="legend-item gradient-block">
-          <span>Terrain Slope (DEM)</span>
-          <div className="gradient-bar slope-gradient"></div>
-          <div className="gradient-labels">
-            <span>Flat (0°)</span>
-            <span>Steep (&gt;10°)</span>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* DOWNLOAD MENU (Only visible when panel is open) */}
       {isPanelOpen && (
@@ -415,53 +444,100 @@ function App() {
             </div>
           ) : (
             <>
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <h4>Risk Area Detected</h4>
-                  <p>{currentData ? `${currentData.hectares.toLocaleString()} Ha` : 'N/A'}</p>
-                </div>
-                <div className="stat-card">
-                  <h4>Annual Change</h4>
-                  <p className={change > 0 ? 'trend-up' : 'trend-down'}>{change ? `${change > 0 ? '↑' : '↓'} ${Math.abs(change)}%` : '--'}</p>
-                </div>
-                <div className="stat-card">
-                  <h4>Status</h4>
-                  <p style={{ color: currentData?.hectares > 15000 ? '#ef4444' : '#fbbf24' }}>{currentData?.hectares > 15000 ? 'CRITICAL' : 'HIGH'}</p>
-                </div>
-              </div>
+              {currentLocation.toLowerCase().includes('majuli') ? (
+                <>
+                  <div className="stats-grid">
+                    <div className="stat-card">
+                      <h4>Risk Area Detected</h4>
+                      <p>{currentData ? `${currentData.hectares.toLocaleString()} Ha` : 'N/A'}</p>
+                    </div>
+                    <div className="stat-card">
+                      <h4>Annual Change</h4>
+                      <p className={change > 0 ? 'trend-up' : 'trend-down'}>{change ? `${change > 0 ? '↑' : '↓'} ${Math.abs(change)}%` : '--'}</p>
+                    </div>
+                    <div className="stat-card">
+                      <h4>Status</h4>
+                      <p style={{ color: currentData?.hectares > 15000 ? '#ef4444' : '#fbbf24' }}>{currentData?.hectares > 15000 ? 'CRITICAL' : 'HIGH'}</p>
+                    </div>
+                  </div>
 
-              <div className="panel-card" style={{marginTop: '20px'}}>
-                <h2 style={{fontSize: '18px', marginBottom: '10px'}}>Temporal Trends</h2>
-                <div style={{ width: '100%', height: 180 }}>
-                  <ResponsiveContainer>
-                    <AreaChart data={erosionStats}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                      <XAxis dataKey="year" stroke="#94a3b8" fontSize={10}/>
-                      <YAxis stroke="#94a3b8" fontSize={10}/>
-                      <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px' }} />
-                      <Area type="monotone" dataKey="hectares" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
+                  <div className="panel-card" style={{marginTop: '20px'}}>
+                    <h2 style={{fontSize: '18px', marginBottom: '10px'}}>Temporal Trends</h2>
+                    <div style={{ width: '100%', height: 180 }}>
+                      <ResponsiveContainer>
+                        <AreaChart data={erosionStats}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                          <XAxis dataKey="year" stroke="#94a3b8" fontSize={10}/>
+                          <YAxis stroke="#94a3b8" fontSize={10}/>
+                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px' }} />
+                          <Area type="monotone" dataKey="hectares" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
 
-                <div className="metadata-box" style={{marginTop: '25px', fontSize: '12px', color: '#94a3b8', background: '#1e293b', padding: '15px', borderRadius: '8px'}}>
-                  <strong style={{color: 'white'}}>Data Layers:</strong><br/><br/>
-                  • Erosion Risk: Sentinel-1 & 2 (GeoJSON)<br/>
-                  • Flood Extent: Sentinel-1 SAR (GeoJSON)<br/>
-                  • Vegetation (NDVI): Sentinel-2 (Raster)<br/>
-                  • Slope (DEM): SRTM 30m (Raster)
-                </div>
-              </div>
+                    <div className="metadata-box" style={{marginTop: '25px', fontSize: '12px', color: '#94a3b8', background: '#1e293b', padding: '15px', borderRadius: '8px'}}>
+                      <strong style={{color: 'white'}}>Data Layers:</strong><br/><br/>
+                      • Erosion Risk: Sentinel-1 & 2 (GeoJSON)<br/>
+                      • Flood Extent: Sentinel-1 SAR (GeoJSON)<br/>
+                      • Vegetation (NDVI): Sentinel-2 (Raster)<br/>
+                      • Slope (DEM): SRTM 30m (Raster)
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="stats-grid">
+                    <div className="stat-card">
+                      <h4>NDVI (Vegetation)</h4>
+                      <p>{liveMetrics && liveMetrics.NDVI !== null && liveMetrics.NDVI !== undefined ? liveMetrics.NDVI.toFixed(4) : 'N/A'}</p>
+                    </div>
+                    <div className="stat-card">
+                      <h4>NDWI (Water)</h4>
+                      <p>{liveMetrics && liveMetrics.NDWI !== null && liveMetrics.NDWI !== undefined ? liveMetrics.NDWI.toFixed(4) : 'N/A'}</p>
+                    </div>
+                    <div className="stat-card">
+                      <h4>Cloud Cover</h4>
+                      <p>{liveMetrics && liveMetrics.cloud_cover_percentage !== null && liveMetrics.cloud_cover_percentage !== undefined ? `${liveMetrics.cloud_cover_percentage.toFixed(2)}%` : 'N/A'}</p>
+                    </div>
+                  </div>
+
+                  <div className="panel-card" style={{marginTop: '20px'}}>
+                    <h2 style={{fontSize: '18px', marginBottom: '10px'}}>Live Satellite Telemetry</h2>
+                    
+                    <div className="metadata-box" style={{fontSize: '13px', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.3)', marginBottom: '20px'}}>
+                      <strong>Notice:</strong><br/>
+                      Historical temporal overlays are localized to Majuli Island. Displaying live satellite telemetry.
+                    </div>
+
+                    <div className="metadata-box" style={{fontSize: '12px', color: '#94a3b8', background: '#1e293b', padding: '15px', borderRadius: '8px'}}>
+                      <strong style={{color: 'white'}}>Observation Details:</strong><br/><br/>
+                      • Source: Sentinel-2 Multispectral Instrument<br/>
+                      • Query Location: {currentLocation}<br/>
+                      • Observation Date: {liveMetrics?.date || 'N/A'}<br/>
+                      • Coordinates: {liveMetrics?.latitude ? `${liveMetrics.latitude.toFixed(4)}, ${liveMetrics.longitude.toFixed(4)}` : 'N/A'}
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
       </div>
 
       {/* FLOATING BOTTOM TIMELINE */}
-      <div className="floating-bottom-bar">
-        <h3>Year Selection: {selectedYear}</h3>
-        <input type="range" min="2018" max="2025" step="1" value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="year-slider" />
-      </div>
+      {currentLocation.toLowerCase().includes('majuli') && (
+        <div className="floating-bottom-bar">
+          <h3>Year Selection: {selectedYear}</h3>
+          <input type="range" min="2018" max="2025" step="1" value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="year-slider" />
+        </div>
+      )}
+
+      {/* GLOBAL CONTEXT NOTIFICATION */}
+      {!currentLocation.toLowerCase().includes('majuli') && (
+        <div className="global-context-banner">
+          Global Telemetry Mode: The high-resolution historical erosion zones, flood inundation maps, and temporal trend datasets are exclusively localized to the Majuli Island research scope. You are currently viewing live, real-time Earth Engine satellite telemetry for {currentLocation}.
+        </div>
+      )}
       
     </div>
   );
