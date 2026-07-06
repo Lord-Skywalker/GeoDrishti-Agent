@@ -679,7 +679,7 @@ function App() {
       </div>
 
       {/* FLOATING BOTTOM TIMELINE */}
-      {currentLocation.toLowerCase().includes('majuli') && (
+      {currentLocation.toLowerCase().includes('majuli') && !isAgentDrawerOpen && (
         <div className="floating-bottom-bar">
           <h3>Year Selection: {selectedYear}</h3>
           <input type="range" min="2018" max="2025" step="1" value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))} className="year-slider" />
