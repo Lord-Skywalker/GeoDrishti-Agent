@@ -32,7 +32,7 @@ body {
   position: absolute;
   top: 20px;
   left: 20px;
-  z-index: 1008; /* Always visible above toggle buttons */
+  z-index: 990; /* Keep behind side panels and drawers */
   background: rgba(15, 23, 42, 0.9);
   padding: 15px 25px;
   border-radius: 8px;
@@ -263,7 +263,7 @@ body {
   position: absolute;
   top: 120px; /* Sits cleanly below the header */
   left: 20px;
-  z-index: 1007; /* Above map controls and toggle buttons */
+  z-index: 990; /* Keep behind side panels and drawers */
   background: rgba(15, 23, 42, 0.9);
   padding: 15px;
   border-radius: 8px;
@@ -364,10 +364,9 @@ body {
     font-size: 11px;
   }
 
-  /* 5. Ensure bottom bar fits nicely on phone and sits at the top (top-24) below header */
+  /* 5. Ensure bottom bar fits nicely on phone */
   .floating-bottom-bar {
-    top: 96px;
-    bottom: auto;
+    bottom: 20px;
     padding: 10px 20px;
   }
 
@@ -376,9 +375,9 @@ body {
     bottom: 90px !important;
   }
 
-  /* 7. Mobile Legend Fix: Sit on the left below the header and year slider, clear of collisions */
+  /* 7. Mobile Legend Fix: Sit on the left right under header, beneath Side Panel */
   .map-legend {
-    top: 170px;
+    top: 100px;
     left: 15px;
     width: 180px;
     padding: 10px;
