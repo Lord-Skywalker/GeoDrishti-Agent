@@ -46,14 +46,17 @@ class GISParams(BaseModel):
     """Pydantic model representing structured query parameters parsed by Agent A."""
     start_date: str = Field(description="The start date in YYYY-MM-DD format (available range: 2018-01-01 to 2026-12-31).")
     end_date: str = Field(description="The end date in YYYY-MM-DD format (available range: 2018-01-01 to 2026-12-31).")
-    latitude_min: float = Field(description="Minimum latitude bounding box boundary.")
-    latitude_max: float = Field(description="Maximum latitude bounding box boundary.")
-    longitude_min: float = Field(description="Minimum longitude bounding box boundary.")
-    longitude_max: float = Field(description="Maximum longitude bounding box boundary.")
-    resolved_latitude: float = Field(description="Resolved latitude point of interest for the queried location.")
-    resolved_longitude: float = Field(description="Resolved longitude point of interest for the queried location.")
-    location_name: str = Field(description="Name of the city, region, or location queried.")
-    indices: List[str] = Field(description="Remote-sensing indices requested, e.g. ['NDVI', 'NDWI', 'Erosion', 'Slope'].")
+    latitude_min: float | None = Field(default=None, description="Minimum latitude bounding box boundary.")
+    latitude_max: float | None = Field(default=None, description="Maximum latitude bounding box boundary.")
+    longitude_min: float | None = Field(default=None, description="Minimum longitude bounding box boundary.")
+    longitude_max: float | None = Field(default=None, description="Maximum longitude bounding box boundary.")
+    resolved_latitude: float | None = Field(default=None, description="Resolved latitude point of interest for the queried location.")
+    resolved_longitude: float | None = Field(default=None, description="Resolved longitude point of interest for the queried location.")
+    location_name: str | None = Field(default=None, description="Name of the city, region, or location queried.")
+    indices: List[str] = Field(default_factory=list, description="Remote-sensing indices requested, e.g. ['NDVI', 'NDWI', 'Erosion', 'Slope'].")
+    date_range_adjusted: bool = Field(default=False, description="Set to True if the requested dates were out of bounds (allowed: 2018-2026) and had to be adjusted/clamped.")
+    adjustment_reason: str | None = Field(default=None, description="Reason for the date range adjustment.")
+    user_message: str | None = Field(default=None, description="A warning message to show the user. MUST be null unless a dispatch/notification was requested but no prior analysis results exist in the chat history.")
 
 
 class RiskReport(BaseModel):
@@ -64,6 +67,15 @@ class RiskReport(BaseModel):
     risk_report: str = Field(description="A comprehensive environmental risk report and interpretation of the geospatial metrics.")
 
 
+class ResourcePlan(BaseModel):
+    applicable: bool
+    geo_bags_required: int = 0
+    bamboo_tons_required: float = 0.0
+    estimated_budget_inr: int = 0
+    estimated_budget_lakhs: float = 0.0
+    action_summary: str
+
+
 class GeospatialWorkflowState(BaseModel):
     """Pydantic model representing the workspace/workflow state."""
     raw_query: str = ""
@@ -72,8 +84,22 @@ class GeospatialWorkflowState(BaseModel):
     gis_params: GISParams | None = None
     mcp_payload: str | None = None
     risk_report: RiskReport | None = None
+    resource_plan: ResourcePlan | None = None
+    dispatch_confirmation: dict | None = None
     status: str = "started"
     notes: str = ""
+    hectares_lost: float = 0.0
+    computed_severity: str = "LOW"
+
+
+def compute_severity(hectares_lost: float) -> str:
+    """Computes deterministic severity based on cumulative hectares lost."""
+    if hectares_lost > 1000:
+        return "HIGH"
+    elif hectares_lost > 300:
+        return "MEDIUM"
+    else:
+        return "LOW"
 
 
 # ==========================================
@@ -152,12 +178,38 @@ def security_failed_fallback(ctx: Context, node_input: Any) -> Event:
 # Agent A: GIS Operator
 # ==========================================
 
+_GLOBAL_DISPATCH_CONFIRMATION = None
+
+def send_emergency_report(report_text: str, recipient: str) -> dict:
+    """Simulates sending an emergency disaster report to an authority.
+    Simulated for demo reliability; real implementation would use smtplib/SendGrid.
+    See docstring: a production version would authenticate via SMTP or a transactional
+    email API (SendGrid/SES) and require recipient email validation, retry logic, and
+    delivery confirmation webhooks.
+    """
+    import datetime
+    if not recipient or not report_text:
+        return {"success": False, "error": "Missing recipient or report_text."}
+    timestamp = datetime.datetime.now().isoformat()
+    # Simulated dispatch — logs only, does not perform real network I/O.
+    print(f"[SIMULATED DISPATCH] To: {recipient} | At: {timestamp} | Report length: {len(report_text)} chars")
+    res = {
+        "success": True,
+        "recipient": recipient,
+        "timestamp": timestamp,
+        "message": f"Emergency report successfully dispatched to {recipient}."
+    }
+    global _GLOBAL_DISPATCH_CONFIRMATION
+    _GLOBAL_DISPATCH_CONFIRMATION = res
+    return res
+
 gis_operator = LlmAgent(
     name="gis_operator",
     model=Gemini(
         model=MODEL_NAME,
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
+    tools=[send_emergency_report],
     instruction=(
         "You are a GIS Operator agent. Your task is to extract structured geospatial query parameters "
         "from the user's natural language request. You must output a JSON conforming to the GISParams schema. "
@@ -167,7 +219,15 @@ gis_operator = LlmAgent(
         "Set `location_name` to the resolved city/region name. "
         "Default bounding box for Majuli Island if unspecified: min_lat=26.80, max_lat=27.15, min_lon=93.90, max_lon=94.60. "
         "In that case, `resolved_latitude` should be 26.95, `resolved_longitude` should be 94.28, and `location_name` should be 'Majuli Island'. "
-        "Default date range if unspecified: start_date='2018-01-01', end_date='2025-12-31'."
+        "Default date range if unspecified: start_date='2018-01-01', end_date='2025-12-31'. "
+        "If the user requests a date outside the available range (2018-01-01 to 2026-12-31), you MUST clamp the start_date/end_date to the "
+        "closest valid boundary, set `date_range_adjusted` to true, and set `adjustment_reason` to explain why (e.g. 'Requested year is before available start date 2018-01-01'). "
+        "If the user's query does not contain any identifiable, resolvable location or place name (e.g. gibberish, unrelated topics like weather/general chat, or empty/nonsensical input), do NOT default to Majuli Island or any other location. Instead, set location_name to null, leave coordinates unset, and populate user_message with: 'I couldn't identify a location in your query. Please specify a place name (e.g. Majuli Island, Tokyo, or coordinates) to run an environmental analysis.' "
+        "If and only if the user explicitly asks to send, email, dispatch, or notify an authority (e.g. 'email this to DDMA', 'send an emergency report', 'notify disaster management') about a report, you MUST: "
+        "1. Check if a prior analysis (erosion risk report, mitigation plan, or budget estimate) has been discussed in the conversation history. "
+        "2. If prior analysis results exist in the chat history, call `send_emergency_report` with a concise summary of those findings as `report_text` and the named authority as `recipient` (default to 'District Disaster Management Authority'). "
+        "3. If no analysis has been discussed in the chat history yet, you MUST NOT call `send_emergency_report` and instead set `user_message` to 'Please run an analysis query first before requesting a dispatch.' "
+        "Otherwise, if the user is NOT requesting a dispatch, email, or notification and a valid location was identified, you MUST leave `user_message` as null."
     ),
     output_schema=GISParams,
     output_key="gis_params",
@@ -185,12 +245,126 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
     2. Caps query scope (max 5 years temporal range) to avoid backend loop exhaustions.
     3. Spawns MCP server client to query stats, config, and live GEE satellite metrics.
     """
+    global _GLOBAL_DISPATCH_CONFIRMATION
+    
+    original_query = ctx.state.get("raw_query", "")
+    raw_query = original_query.lower()
+    dispatch_intent = any(kw in raw_query for kw in ["email", "send", "dispatch", "notify", "mail"])
+    
+    if dispatch_intent:
+        risk_report = ctx.state.get("risk_report")
+        if not risk_report:
+            # Fresh session or no report exists -> Return early warning message
+            msg = "Please run an analysis query first before requesting a dispatch."
+            gis_params = GISParams(
+                start_date="2018-01-01",
+                end_date="2025-12-31",
+                latitude_min=26.80,
+                latitude_max=27.15,
+                longitude_min=93.90,
+                longitude_max=94.60,
+                resolved_latitude=26.95,
+                resolved_longitude=94.28,
+                location_name="Majuli Island",
+                indices=["NDVI", "NDWI"],
+                date_range_adjusted=False,
+                user_message=msg
+            )
+            return Event(
+                output=msg,
+                content=types.Content(role="model", parts=[types.Part.from_text(text=msg)]),
+                actions=EventActions(
+                    route="user_message_complete",
+                    state_delta={
+                        "status": "data_retrieved",
+                        "notes": msg,
+                        "gis_params": gis_params.model_dump(),
+                        "risk_report": None,
+                        "resource_plan": None,
+                        "mcp_payload": None,
+                        "dispatch_confirmation": None
+                    }
+                )
+            )
+        else:
+            # Report exists -> extract recipient from original query preserving capitalization
+            recipient = "District Disaster Management Authority"
+            import re
+            match = re.search(r"to\s+(.+)$", original_query, re.IGNORECASE)
+            if match:
+                recipient = match.group(1).strip(".?!, ")
+            
+            # Reconstruct text summary
+            report_desc = ""
+            report_findings = []
+            if isinstance(risk_report, dict):
+                report_desc = risk_report.get("risk_report", "")
+                report_findings = risk_report.get("findings", [])
+            else:
+                report_desc = getattr(risk_report, "risk_report", "")
+                report_findings = getattr(risk_report, "findings", [])
+                
+            resource_plan = ctx.state.get("resource_plan") or {}
+            plan_summary = ""
+            budget = None
+            if isinstance(resource_plan, dict):
+                plan_summary = resource_plan.get("action_summary", "")
+                budget = resource_plan.get("estimated_budget_lakhs")
+            else:
+                plan_summary = getattr(resource_plan, "action_summary", "")
+                budget = getattr(resource_plan, "estimated_budget_lakhs", None)
+                
+            report_text = f"Risk Report Description: {report_desc}\nFindings:\n"
+            for finding in report_findings:
+                report_text += f"- {finding}\n"
+            if plan_summary:
+                report_text += f"Resource Action Plan: {plan_summary}\n"
+            if budget:
+                report_text += f"Estimated Mitigation Budget: {budget} Lakhs INR\n"
+                
+            # Perform dispatch
+            res = send_emergency_report(report_text, recipient)
+            ctx.state["dispatch_confirmation"] = res
+            msg = res["message"]
+            
+            # Update gis_params to clear user_message
+            gis_dict = ctx.state.get("gis_params") or {}
+            if isinstance(gis_dict, dict):
+                gis_dict["user_message"] = None
+            
+            return Event(
+                output=msg,
+                content=types.Content(role="model", parts=[types.Part.from_text(text=msg)]),
+                actions=EventActions(
+                    route="dispatch_complete",
+                    state_delta={
+                        "status": "data_retrieved",
+                        "notes": msg,
+                        "dispatch_confirmation": res,
+                        "gis_params": gis_dict
+                    }
+                )
+            )
+
+    # For normal queries, ignore global dispatch values
+    _GLOBAL_DISPATCH_CONFIRMATION = None
+
     gis_dict = ctx.state.get("gis_params")
     if not gis_dict:
         error_msg = "GIS Parameters extraction failed."
         return Event(
             output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
+            actions=EventActions(
+                route="invalid",
+                state_delta={
+                    "validation_error": error_msg,
+                    "status": "validation_failed",
+                    "risk_report": None,
+                    "resource_plan": None,
+                    "mcp_payload": None,
+                    "dispatch_confirmation": None
+                }
+            )
         )
 
     try:
@@ -199,8 +373,43 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
         error_msg = f"Failed to validate GIS parameters: {str(e)}"
         return Event(
             output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
+            actions=EventActions(
+                route="invalid",
+                state_delta={
+                    "validation_error": error_msg,
+                    "status": "validation_failed",
+                    "risk_report": None,
+                    "resource_plan": None,
+                    "mcp_payload": None,
+                    "dispatch_confirmation": None
+                }
+            )
         )
+
+    # Check: if location_name is null/missing, skip GEE/database calls entirely and return early
+    if gis_params.location_name is None or gis_params.location_name.strip() == "":
+        msg = gis_params.user_message or "I couldn't identify a location in your query. Please specify a place name (e.g. Majuli Island, Tokyo, or coordinates) to run an environmental analysis."
+        gis_params.user_message = msg
+        return Event(
+            output=msg,
+            content=types.Content(role="model", parts=[types.Part.from_text(text=msg)]),
+            actions=EventActions(
+                route="user_message_complete",
+                state_delta={
+                    "status": "data_retrieved",
+                    "notes": msg,
+                    "gis_params": gis_params.model_dump(),
+                    "risk_report": None,
+                    "resource_plan": None,
+                    "mcp_payload": None,
+                    "dispatch_confirmation": None
+                }
+            )
+        )
+
+    # Ensure user_message is null for normal queries
+    gis_params.user_message = None
+    ctx.state["gis_params"] = gis_params.model_dump()
 
     # 1. Date Range checks
     try:
@@ -210,31 +419,63 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
         error_msg = "Invalid date format. Dates must be in YYYY-MM-DD format."
         return Event(
             output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
+            actions=EventActions(
+                route="invalid",
+                state_delta={
+                    "validation_error": error_msg,
+                    "status": "validation_failed",
+                    "risk_report": None,
+                    "resource_plan": None,
+                    "mcp_payload": None,
+                    "dispatch_confirmation": None
+                }
+            )
         )
 
     min_allowed = datetime.datetime(2018, 1, 1)
     max_allowed = datetime.datetime(2026, 12, 31)
 
-    if not (min_allowed <= start_dt <= max_allowed) or not (min_allowed <= end_dt <= max_allowed):
-        error_msg = "Requested dates are out of bounds. Data is only available between 2018-01-01 and 2026-12-31."
-        return Event(
-            output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
-        )
+    adjusted = False
+    reasons = []
+
+    if start_dt < min_allowed:
+        start_dt = min_allowed
+        adjusted = True
+        reasons.append("start date is before 2018-01-01")
+    elif start_dt > max_allowed:
+        start_dt = max_allowed
+        adjusted = True
+        reasons.append("start date is after 2026-12-31")
+
+    if end_dt < min_allowed:
+        end_dt = min_allowed
+        adjusted = True
+        reasons.append("end date is before 2018-01-01")
+    elif end_dt > max_allowed:
+        end_dt = max_allowed
+        adjusted = True
+        reasons.append("end date is after 2026-12-31")
 
     if start_dt > end_dt:
-        error_msg = "Start date cannot be after the end date."
-        return Event(
-            output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
-        )
+        start_dt = end_dt
+        adjusted = True
+        reasons.append("start date was after end date")
+
+    if adjusted:
+        gis_params.start_date = start_dt.strftime("%Y-%m-%d")
+        gis_params.end_date = end_dt.strftime("%Y-%m-%d")
+        gis_params.date_range_adjusted = True
+        gis_params.adjustment_reason = ", ".join(reasons)
+        ctx.state["gis_params"] = gis_params.model_dump()
 
     # CAPPING SCOPE: Cap queries to a max range of 5 years to protect backend resource exhaustion
     if (end_dt - start_dt).days > 5 * 365:
         clamped_end = start_dt + datetime.timedelta(days=5 * 365)
         gis_params.end_date = clamped_end.strftime("%Y-%m-%d")
-        ctx.state["gis_params"]["end_date"] = gis_params.end_date  # Update state
+        end_dt = clamped_end
+        gis_params.date_range_adjusted = True
+        gis_params.adjustment_reason = f"Requested date range exceeded 5-year max limit"
+        ctx.state["gis_params"] = gis_params.model_dump()
         notes = f"Warning: Date range capped to 5 years ({gis_params.start_date} to {gis_params.end_date}). "
     else:
         notes = ""
@@ -244,21 +485,51 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
         error_msg = "Latitude coordinates must be between -90.0 and 90.0."
         return Event(
             output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
+            actions=EventActions(
+                route="invalid",
+                state_delta={
+                    "validation_error": error_msg,
+                    "status": "validation_failed",
+                    "risk_report": None,
+                    "resource_plan": None,
+                    "mcp_payload": None,
+                    "dispatch_confirmation": None
+                }
+            )
         )
 
     if not (-180.0 <= gis_params.longitude_min <= 180.0) or not (-180.0 <= gis_params.longitude_max <= 180.0) or not (-180.0 <= gis_params.resolved_longitude <= 180.0):
         error_msg = "Longitude coordinates must be between -180.0 and 180.0."
         return Event(
             output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
+            actions=EventActions(
+                route="invalid",
+                state_delta={
+                    "validation_error": error_msg,
+                    "status": "validation_failed",
+                    "risk_report": None,
+                    "resource_plan": None,
+                    "mcp_payload": None,
+                    "dispatch_confirmation": None
+                }
+            )
         )
 
     if gis_params.latitude_min > gis_params.latitude_max or gis_params.longitude_min > gis_params.longitude_max:
         error_msg = "Invalid coordinate bounds: minimum coordinate cannot exceed maximum coordinate."
         return Event(
             output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
+            actions=EventActions(
+                route="invalid",
+                state_delta={
+                    "validation_error": error_msg,
+                    "status": "validation_failed",
+                    "risk_report": None,
+                    "resource_plan": None,
+                    "mcp_payload": None,
+                    "dispatch_confirmation": None
+                }
+            )
         )
 
     # 3. Pull metrics from MCP server subprocess using stdio transport
@@ -295,7 +566,7 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
 
                 # Check if location_name contains 'Majuli' (case-insensitive)
                 is_majuli = "majuli" in (gis_params.location_name or "").lower()
-
+                hectares_lost = 0.0
                 if is_majuli:
                     # Fetch erosion statistics from MCP server
                     stats_res = await session.call_tool("get_erosion_stats", arguments={})
@@ -304,8 +575,11 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
                     start_year = start_dt.year
                     end_year = end_dt.year
                     filtered_stats = [item for item in stats_list if start_year <= item.get("year", 0) <= end_year]
+                    hectares_lost = sum(float(item.get("hectares", 0.0)) for item in filtered_stats)
                 else:
                     filtered_stats = "Historical database tracking is localized only to Majuli Island."
+
+                computed_severity = compute_severity(hectares_lost)
 
                 payload = {
                     "gis_config": gis_config,
@@ -322,7 +596,9 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
                         "resolved_longitude": gis_params.resolved_longitude,
                         "location_name": gis_params.location_name,
                         "indices": gis_params.indices
-                    }
+                    },
+                    "cumulative_hectares_lost": hectares_lost,
+                    "computed_severity": computed_severity
                 }
                 
                 payload_str = json.dumps(payload)
@@ -333,7 +609,11 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
                         state_delta={
                             "mcp_payload": payload_str,
                             "status": "data_retrieved",
-                            "notes": notes + "Geospatial metrics pulled successfully from backend via MCP tools."
+                            "notes": notes + "Geospatial metrics pulled successfully from backend via MCP tools.",
+                            "gis_params": gis_params.model_dump(),
+                            "hectares_lost": hectares_lost,
+                            "computed_severity": computed_severity,
+                            "dispatch_confirmation": None
                         }
                     )
                 )
@@ -341,7 +621,17 @@ async def validate_bounds_and_fetch_data(ctx: Context, node_input: Any) -> Event
         error_msg = f"MCP Server invocation failed: {str(e)}"
         return Event(
             output=error_msg,
-            actions=EventActions(route="invalid", state_delta={"validation_error": error_msg, "status": "validation_failed"})
+            actions=EventActions(
+                route="invalid",
+                state_delta={
+                    "validation_error": error_msg,
+                    "status": "validation_failed",
+                    "risk_report": None,
+                    "resource_plan": None,
+                    "mcp_payload": None,
+                    "dispatch_confirmation": None
+                }
+            )
         )
 
 
@@ -355,6 +645,18 @@ def validation_failed_fallback(ctx: Context, node_input: Any) -> Event:
             state_delta={"status": "failed", "notes": err}
         )
     )
+
+
+@node
+def dispatch_complete_fallback(ctx: Context, node_input: Any) -> Event:
+    """Fallback node when dispatch completes successfully."""
+    return Event(output=node_input)
+
+
+@node
+def user_message_complete_fallback(ctx: Context, node_input: Any) -> Event:
+    """Fallback node when conversational warning completes."""
+    return Event(output=node_input)
 
 
 # ==========================================
@@ -377,10 +679,124 @@ environmental_analyst = LlmAgent(
         "and explicitly note in the report that historical data is not available outside of Majuli Island. "
         "Review the metrics, detect anomalies (like low/high NDVI/NDWI values for that specific location), "
         "assess risk severity, outline findings (including referencing the live GEE metrics: NDVI, NDWI, date, and cloud cover), "
-        "and produce a formal risk report conforming to the RiskReport schema for that location."
+        "and produce a formal risk report conforming to the RiskReport schema for that location. "
+        "\n"
+        "WORDING CRITICAL RULES:\n"
+        "1. You MUST NEVER expose raw database field names like 'raw_delta_ha' in any user-facing text, risk report prose, or findings. "
+        "Always use plain language like 'hectares of erosion', 'hectares of land loss', or 'hectares of land gained'.\n"
+        "2. You MUST clearly and explicitly separate the historical erosion/accretion figure "
+        "from the live/current GEE satellite snapshot (which has a different, unrelated date) in the risk report language. "
+        "Do not phrase it as if the live satellite image itself shows the historical hectare figure. Instead, use this structure: "
+        "'Historical analysis for [year/years] shows [X] hectares of land loss/gain, based on Sentinel-2 dry-season water-boundary analysis. "
+        "As a separate current-conditions check, the most recent live satellite pass (date: [live_date]) shows NDVI of [NDVI] and NDWI of [NDWI].'\n"
+        "3. You MUST use severity=[computed_severity] exactly as provided in the context — do not independently judge severity. "
+        "Specifically, look for the 'computed_severity' key in the input context payload and map its value ('LOW', 'MEDIUM', or 'HIGH') "
+        "directly and exactly to the 'severity' field in the output schema.\n"
+        "4. If historical_erosion_stats contains MULTIPLE years, you MUST summarize the erosion/accretion pattern across ALL years in the range, not just the most recent one. "
+        "Report the total cumulative hectares lost across the full range (this is provided to you as 'cumulative_hectares_lost' in the payload context — use it exactly, do not recompute), "
+        "and briefly mention which specific years were erosion vs accretion (e.g. '2019 and 2020 saw erosion of X and Y hectares respectively, while 2021-2022 saw accretion'). "
+        "Never state '0 hectares of land loss' for a multi-year range if the pre-computed cumulative total is greater than 0.\n"
+        "\n"
+        "If the query is for Majuli Island and the historical stats show a negative value for change, report this as land accretion (gain or sandbar emergence) rather than erosion, and specify that net land loss is 0 hectares. If the change is positive, report it as land erosion/loss. "
+        "For global (non-Majuli) queries, if the satellite scene date in the GEE metrics payload falls outside the user's requested start_date/end_date range, the risk report and findings must explicitly and clearly state: 'Note: Live satellite indices reflect the most recent available scene (see date below), not the requested historical range, since global mode uses real-time telemetry rather than historical records.'"
     ),
     output_schema=RiskReport,
     output_key="risk_report",
+)
+
+
+# ==========================================
+# Agent C: Resource Planner
+# ==========================================
+
+def calculate_mitigation_cost(hectares_lost: float, risk_severity: str) -> dict:
+    """Calculates estimated erosion mitigation material and budget requirements.
+
+    Args:
+        hectares_lost: Numeric hectares lost or at risk. Must be > 0.
+        risk_severity: 'CRITICAL', 'HIGH', 'MEDIUM', or 'LOW'.
+    """
+    if hectares_lost <= 0:
+        return {"applicable": False, "reason": "No measurable hectare loss for this query."}
+
+    BASE_GEO_BAGS_PER_HECTARE = 400
+    BASE_BAMBOO_TONS_PER_HECTARE = 2.5
+    GEO_BAG_COST = 45
+    BAMBOO_COST_PER_TON = 3000
+    LABOR_OVERHEAD = 0.15
+
+    multiplier = {"CRITICAL": 1.5, "HIGH": 1.2}.get(risk_severity.upper(), 1.0)
+    geo_bags = int(BASE_GEO_BAGS_PER_HECTARE * hectares_lost * multiplier)
+    bamboo_tons = round(BASE_BAMBOO_TONS_PER_HECTARE * hectares_lost * multiplier, 1)
+    material_cost = (geo_bags * GEO_BAG_COST) + (bamboo_tons * BAMBOO_COST_PER_TON)
+    total_cost = material_cost * (1 + LABOR_OVERHEAD)
+
+    return {
+        "applicable": True,
+        "geo_bags_required": geo_bags,
+        "bamboo_tons_required": bamboo_tons,
+        "estimated_budget_inr": round(total_cost),
+        "estimated_budget_lakhs": round(total_cost / 100000, 2),
+    }
+
+@node
+def prepare_planner_input(ctx: Context, node_input: Any) -> Event:
+    """Prepares structured context text for the resource planner node."""
+    import json
+    gis_params = ctx.state.get("gis_params") or {}
+    location_name = gis_params.get("location_name", "")
+    risk_report = ctx.state.get("risk_report") or {}
+    
+    # Retrieve pre-computed hectares_lost and severity
+    hectares_lost = ctx.state.get("hectares_lost", 0.0)
+    severity_val = ctx.state.get("computed_severity", "LOW")
+
+    findings_list = getattr(risk_report, 'findings', []) if hasattr(risk_report, 'findings') else risk_report.get('findings', [])
+
+    # Resolve date range for range-based total wording in prompt
+    start_date = gis_params.get("start_date", "2018-01-01")
+    end_date = gis_params.get("end_date", "2022-12-31")
+    try:
+        start_year = start_date.split("-")[0]
+        end_year = end_date.split("-")[0]
+    except Exception:
+        start_year = "2018"
+        end_year = "2022"
+
+    if start_year == end_year:
+        range_str = f"in {start_year}"
+    else:
+        range_str = f"across {start_year}-{end_year}"
+
+    prompt_text = (
+        f"Location: {location_name}\n"
+        f"Risk Report Severity: {severity_val}\n"
+        f"Risk Report Findings: {', '.join(findings_list)}\n"
+        f"Total hectares lost {range_str}: {hectares_lost}\n"
+    )
+    from google.genai import types
+    return Event(
+        output=prompt_text,
+        content=types.Content(role="user", parts=[types.Part.from_text(text=prompt_text)])
+    )
+
+resource_planner = LlmAgent(
+    name="resource_planner",
+    model=Gemini(
+        model=MODEL_NAME,
+        retry_options=types.HttpRetryOptions(attempts=3),
+    ),
+    instruction=(
+        "You are a Resource Allocation Agent for disaster management. Review the Risk Report from the Environmental Analyst. "
+        "IMPORTANT: Only proceed if the report is for the LOCAL Majuli historical dataset and contains a numeric hectares_lost value greater than 0. "
+        "If the query is global/live-telemetry (no local ground-truth loss figure), immediately return ResourcePlan with applicable=false and action_summary='No mitigation plan applicable — live telemetry query only.' "
+        "Do not fabricate a hectares_lost figure under any circumstance. "
+        "Otherwise, extract hectares_lost and risk_severity, call `calculate_mitigation_cost` via the MCP server, and draft a concise action_summary outlining immediate deployment steps. "
+        "Output JSON conforming to the ResourcePlan schema."
+    ),
+    tools=[calculate_mitigation_cost],
+    output_schema=ResourcePlan,
+    output_key="resource_plan",
 )
 
 
@@ -399,7 +815,13 @@ geospatial_workflow = Workflow(
         # Agent A Parsing & Validation Gate
         Edge(from_node=gis_operator, to_node=validate_bounds_and_fetch_data),
         Edge(from_node=validate_bounds_and_fetch_data, to_node=validation_failed_fallback, route="invalid"),
+        Edge(from_node=validate_bounds_and_fetch_data, to_node=dispatch_complete_fallback, route="dispatch_complete"),
+        Edge(from_node=validate_bounds_and_fetch_data, to_node=user_message_complete_fallback, route="user_message_complete"),
         Edge(from_node=validate_bounds_and_fetch_data, to_node=environmental_analyst, route="valid"),
+        
+        # Agent B to Agent C with intermediate prompt compiler
+        Edge(from_node=environmental_analyst, to_node=prepare_planner_input),
+        Edge(from_node=prepare_planner_input, to_node=resource_planner),
     ],
     state_schema=GeospatialWorkflowState,
 )

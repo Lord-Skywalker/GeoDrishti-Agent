@@ -18,11 +18,6 @@ __pycache__/
 .env.local
 .env.*.local
 gee-credentials.json
-*.json  # Optional: ignores all json files in the root if you want to be extra safe, but gee-credentials.json is the critical one
-
-# Django Database
-db.sqlite3
-backend/db.sqlite3
 
 # Frontend build directories
 frontend/dist/

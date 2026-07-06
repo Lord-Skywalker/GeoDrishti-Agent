@@ -22,14 +22,14 @@ def get_erosion_stats(year: int = None) -> str:
     if year is not None:
         try:
             item = ErosionData.objects.get(year=int(year))
-            return json.dumps([{"year": item.year, "hectares": item.hectares}])
+            return json.dumps([{"year": item.year, "hectares": item.hectares, "water_area_ha": item.water_area_ha, "raw_delta_ha": item.raw_delta_ha}])
         except ErosionData.DoesNotExist:
             return json.dumps([])
         except ValueError:
             return json.dumps({"error": "Invalid year format"})
     else:
         data = ErosionData.objects.all().order_by("year")
-        return json.dumps([{"year": item.year, "hectares": item.hectares} for item in data])
+        return json.dumps([{"year": item.year, "hectares": item.hectares, "water_area_ha": item.water_area_ha, "raw_delta_ha": item.raw_delta_ha} for item in data])
 
 @mcp.tool()
 def get_gis_config() -> str:
@@ -108,11 +108,18 @@ def get_gee_satellite_metrics(latitude: float, longitude: float) -> str:
         # Get metadata
         date_str = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd').getInfo()
         cloud_pct = image.get('CLOUDY_PIXEL_PERCENTAGE').getInfo()
+        if cloud_pct is not None:
+            cloud_pct = round(float(cloud_pct), 2)
         
         # Extract features
         properties = sampled.get('properties', {}) if sampled else {}
         ndvi_val = properties.get('NDVI', None)
+        if ndvi_val is not None:
+            ndvi_val = round(float(ndvi_val), 4)
+            
         ndwi_val = properties.get('NDWI', None)
+        if ndwi_val is not None:
+            ndwi_val = round(float(ndwi_val), 4)
         
         res = {
             "latitude": latitude,
@@ -125,6 +132,53 @@ def get_gee_satellite_metrics(latitude: float, longitude: float) -> str:
         return json.dumps(res)
     except Exception as e:
         return json.dumps({"error": str(e)})
+
+@mcp.tool()
+def calculate_mitigation_cost(hectares_lost: float, risk_severity: str) -> dict:
+    """Returns mitigation material and budget estimates. Returns applicable=False if hectares_lost <= 0."""
+    if hectares_lost <= 0:
+        return {"applicable": False, "reason": "No measurable hectare loss for this query."}
+
+    BASE_GEO_BAGS_PER_HECTARE = 400
+    BASE_BAMBOO_TONS_PER_HECTARE = 2.5
+    GEO_BAG_COST = 45
+    BAMBOO_COST_PER_TON = 3000
+    LABOR_OVERHEAD = 0.15
+
+    multiplier = {"CRITICAL": 1.5, "HIGH": 1.2}.get(risk_severity.upper(), 1.0)
+    geo_bags = int(BASE_GEO_BAGS_PER_HECTARE * hectares_lost * multiplier)
+    bamboo_tons = round(BASE_BAMBOO_TONS_PER_HECTARE * hectares_lost * multiplier, 1)
+    material_cost = (geo_bags * GEO_BAG_COST) + (bamboo_tons * BAMBOO_COST_PER_TON)
+    total_cost = material_cost * (1 + LABOR_OVERHEAD)
+
+    return {
+        "applicable": True,
+        "geo_bags_required": geo_bags,
+        "bamboo_tons_required": bamboo_tons,
+        "estimated_budget_inr": round(total_cost),
+        "estimated_budget_lakhs": round(total_cost / 100000, 2),
+    }
+
+@mcp.tool()
+def send_emergency_report(report_text: str, recipient: str) -> dict:
+    """Simulates sending an emergency disaster report to an authority.
+    Simulated for demo reliability; real implementation would use smtplib/SendGrid.
+    See docstring: a production version would authenticate via SMTP or a transactional
+    email API (SendGrid/SES) and require recipient email validation, retry logic, and
+    delivery confirmation webhooks.
+    """
+    import datetime
+    if not recipient or not report_text:
+        return {"success": False, "error": "Missing recipient or report_text."}
+    timestamp = datetime.datetime.now().isoformat()
+    # Simulated dispatch — logs only, does not perform real network I/O.
+    print(f"[SIMULATED DISPATCH] To: {recipient} | At: {timestamp} | Report length: {len(report_text)} chars")
+    return {
+        "success": True,
+        "recipient": recipient,
+        "timestamp": timestamp,
+        "message": f"Emergency report successfully dispatched to {recipient}."
+    }
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

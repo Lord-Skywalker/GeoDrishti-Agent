@@ -4,4 +4,4 @@ from .models import ErosionData
 class ErosionDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = ErosionData
-        fields = ['year', 'hectares']
+        fields = ['year', 'hectares', 'water_area_ha', 'raw_delta_ha']

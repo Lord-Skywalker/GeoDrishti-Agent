@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, GeoJSON, ImageOverlay, LayersControl, ScaleControl, Marker, Popup, FeatureGroup, useMap } from 'react-leaflet';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import 'leaflet/dist/leaflet.css'; 
 import './App.css';
 
@@ -48,6 +48,27 @@ function App() {
     }
   ]);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [sessionId, setSessionId] = useState('');
+
+  useEffect(() => {
+    let session = `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      try {
+        session = crypto.randomUUID();
+      } catch (e) {}
+    }
+    setSessionId(session);
+  }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const majuliPosition = [26.95, 94.28];
   const [mapCenter, setMapCenter] = useState(majuliPosition);
@@ -55,6 +76,8 @@ function App() {
   const [customMarker, setCustomMarker] = useState(null);
   const [currentLocation, setCurrentLocation] = useState('Majuli Island');
   const [liveMetrics, setLiveMetrics] = useState(null);
+  const [resourcePlan, setResourcePlan] = useState(null);
+  const [riskReport, setRiskReport] = useState(null);
   const majuliBounds = [[26.80, 93.90], [27.15, 94.60]]; 
 
   const landmarks = [
@@ -83,7 +106,7 @@ function App() {
     fetch(getApiUrl('/api/agent-chat/'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: text })
+      body: JSON.stringify({ query: text, session_id: sessionId })
     })
       .then(res => {
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
@@ -111,64 +134,97 @@ function App() {
         }
 
         // 3. Process normal agent response
-        if (data.status === 'data_retrieved' && data.risk_report) {
-          const report = data.risk_report;
-          const severityTag = `[${report.severity} RISK]`;
-          const responseText = `${severityTag} ${report.risk_report}`;
-          
-          setMessages(prev => [...prev, {
-            sender: 'agent',
-            text: responseText,
-            findings: report.findings,
-            gisParams: data.gis_params
-          }]);
-
-          if (data.gis_params && data.gis_params.location_name) {
-            setCurrentLocation(data.gis_params.location_name);
+        if (data.status === 'data_retrieved') {
+          if (data.dispatch_confirmation && data.dispatch_confirmation.success) {
+            setToast({
+              recipient: data.dispatch_confirmation.recipient,
+              timestamp: data.dispatch_confirmation.timestamp
+            });
           }
 
-          let liveMetricsData = null;
-          if (data.live_gee_satellite_metrics) {
-            liveMetricsData = data.live_gee_satellite_metrics;
-          } else if (data.mcp_payload) {
-            try {
-              const parsedMcp = JSON.parse(data.mcp_payload);
-              if (parsedMcp && parsedMcp.live_gee_satellite_metrics) {
-                liveMetricsData = parsedMcp.live_gee_satellite_metrics;
-              }
-            } catch (e) {
-              console.error("Error parsing mcp_payload", e);
+          if (data.risk_report) {
+            const report = data.risk_report;
+            setRiskReport(report);
+            const severityTag = `[${report.severity} RISK]`;
+            const responseText = `${severityTag} ${report.risk_report}`;
+            
+            setMessages(prev => [...prev, {
+              sender: 'agent',
+              text: responseText,
+              findings: report.findings,
+              gisParams: data.gis_params
+            }]);
+
+            if (data.gis_params && data.gis_params.location_name) {
+              setCurrentLocation(data.gis_params.location_name);
             }
-          }
-          if (liveMetricsData) {
-            setLiveMetrics(liveMetricsData);
-          }
 
-          // Dynamic Insight Loop: Automatically switch year to matching endpoint temporal boundary
-          if (data.gis_params && data.gis_params.end_date) {
-            const endYear = new Date(data.gis_params.end_date).getFullYear();
-            if (endYear >= 2018 && endYear <= 2025) {
-              setSelectedYear(endYear);
-            }
-          }
-
-          // Fly map container to the new location coordinates dynamically
-          if (data.gis_params) {
-            let lat = data.gis_params.resolved_latitude;
-            let lon = data.gis_params.resolved_longitude;
-            if (lat === undefined || lon === undefined || lat === null || lon === null) {
-              if (data.gis_params.latitude_min !== undefined && data.gis_params.latitude_max !== undefined) {
-                lat = (data.gis_params.latitude_min + data.gis_params.latitude_max) / 2;
-                lon = (data.gis_params.longitude_min + data.gis_params.longitude_max) / 2;
+            let liveMetricsData = null;
+            if (data.live_gee_satellite_metrics) {
+              liveMetricsData = data.live_gee_satellite_metrics;
+            } else if (data.mcp_payload) {
+              try {
+                const parsedMcp = JSON.parse(data.mcp_payload);
+                if (parsedMcp && parsedMcp.live_gee_satellite_metrics) {
+                  liveMetricsData = parsedMcp.live_gee_satellite_metrics;
+                }
+              } catch (e) {
+                console.error("Error parsing mcp_payload", e);
               }
             }
-            if (lat !== undefined && lon !== undefined && lat !== null && lon !== null && !isNaN(lat) && !isNaN(lon)) {
-              setMapCenter([lat, lon]);
-              setMapZoom(11);
-              setCustomMarker({
-                position: [lat, lon],
-                name: data.gis_params.location_name || "Queried Location"
-              });
+            if (liveMetricsData) {
+              setLiveMetrics(liveMetricsData);
+            }
+
+            if (data.resource_plan) {
+              setResourcePlan(data.resource_plan);
+            } else {
+              setResourcePlan(null);
+            }
+
+            // Dynamic Insight Loop: Automatically switch year to matching endpoint temporal boundary
+            if (data.gis_params && data.gis_params.end_date) {
+              const endYear = new Date(data.gis_params.end_date).getFullYear();
+              if (endYear >= 2018 && endYear <= 2025) {
+                setSelectedYear(endYear);
+              }
+            }
+
+            // Fly map container to the new location coordinates dynamically
+            if (data.gis_params) {
+              let lat = data.gis_params.resolved_latitude;
+              let lon = data.gis_params.resolved_longitude;
+              if (lat === undefined || lon === undefined || lat === null || lon === null) {
+                if (data.gis_params.latitude_min !== undefined && data.gis_params.latitude_max !== undefined) {
+                  lat = (data.gis_params.latitude_min + data.gis_params.latitude_max) / 2;
+                  lon = (data.gis_params.longitude_min + data.gis_params.longitude_max) / 2;
+                }
+              }
+              if (lat !== undefined && lon !== undefined && lat !== null && lon !== null && !isNaN(lat) && !isNaN(lon)) {
+                setMapCenter([lat, lon]);
+                setMapZoom(11);
+                setCustomMarker({
+                  position: [lat, lon],
+                  name: data.gis_params.location_name || "Queried Location"
+                });
+              }
+            }
+          } else {
+            // Conversational response fallback (e.g., warning message or dispatch notification)
+            const fallbackText = data.notes || 'Operation completed successfully.';
+            const isClarification = data.gis_params && !data.gis_params.location_name;
+            
+            setMessages(prev => [...prev, {
+              sender: 'agent',
+              text: fallbackText,
+              gisParams: isClarification ? null : data.gis_params
+            }]);
+
+            if (isClarification) {
+              setLiveMetrics(null);
+              setResourcePlan(null);
+              setRiskReport(null);
+              setCustomMarker(null);
             }
           }
         } else {
@@ -329,7 +385,12 @@ function App() {
                   {m.gisParams.latitude_min !== undefined && m.gisParams.latitude_min !== null && (
                     <>• BBox: Lat [{m.gisParams.latitude_min.toFixed(2)}, {m.gisParams.latitude_max.toFixed(2)}] | Lon [{m.gisParams.longitude_min.toFixed(2)}, {m.gisParams.longitude_max.toFixed(2)}]<br/></>
                   )}
-                  • Indices: {m.gisParams.indices ? m.gisParams.indices.join(', ') : 'None'}
+                  • Indices: {m.gisParams.indices && m.gisParams.indices.length > 0 ? m.gisParams.indices.join(', ') : 'None specified'}
+                  {m.gisParams.date_range_adjusted && (
+                    <div style={{ fontSize: '11px', color: '#fbbf24', marginTop: '5px', fontWeight: '500' }}>
+                      ⚠️ Note: requested date range was adjusted to {m.gisParams.start_date.substring(0, 4)}-{m.gisParams.end_date.substring(0, 4)} due to {m.gisParams.adjustment_reason}.
+                    </div>
+                  )}
                 </div>
               )}
               <div>{m.text}</div>
@@ -370,7 +431,7 @@ function App() {
       {/* FLOATING HEADER */}
       <div className={`floating-header ${isAgentDrawerOpen ? 'shifted' : ''}`}>
         <h1>GeoDrishti</h1>
-        <span className="header-subtitle">NIT Silchar Research | Anubhav_2315094 | {currentLocation}</span>
+        <p>NIT Silchar Research | Anubhav Deb | {currentLocation}</p>
       </div>
 
       {/* STATIC MAP LEGEND */}
@@ -448,16 +509,43 @@ function App() {
                 <>
                   <div className="stats-grid">
                     <div className="stat-card">
-                      <h4>Risk Area Detected</h4>
+                      <h4>Erosion Loss</h4>
                       <p>{currentData ? `${currentData.hectares.toLocaleString()} Ha` : 'N/A'}</p>
+                      {currentData && currentData.hectares !== currentData.raw_delta_ha && (
+                        <span style={{ fontSize: '11px', color: '#38bdf8', marginTop: '2px', display: 'block' }}>
+                          Net Change: {currentData.raw_delta_ha > 0 ? '+' : ''}{currentData.raw_delta_ha.toLocaleString()} Ha
+                        </span>
+                      )}
                     </div>
                     <div className="stat-card">
                       <h4>Annual Change</h4>
-                      <p className={change > 0 ? 'trend-up' : 'trend-down'}>{change ? `${change > 0 ? '↑' : '↓'} ${Math.abs(change)}%` : '--'}</p>
+                      <p className={currentData?.raw_delta_ha > 0 ? 'trend-up' : 'trend-down'}>
+                        {currentData && currentData.raw_delta_ha !== undefined
+                          ? `${currentData.raw_delta_ha > 0 ? '↑ +' : '↓ '}${currentData.raw_delta_ha.toLocaleString()} Ha`
+                          : '--'}
+                      </p>
                     </div>
                     <div className="stat-card">
                       <h4>Status</h4>
-                      <p style={{ color: currentData?.hectares > 15000 ? '#ef4444' : '#fbbf24' }}>{currentData?.hectares > 15000 ? 'CRITICAL' : 'HIGH'}</p>
+                      <p style={{ 
+                        color: riskReport
+                          ? (riskReport.severity === 'HIGH' 
+                              ? '#ef4444' 
+                              : (riskReport.severity === 'MEDIUM' ? '#fbbf24' : '#22c55e'))
+                          : (currentData
+                              ? (currentData.hectares > 1000 
+                                  ? '#ef4444' 
+                                  : (currentData.hectares > 300 ? '#fbbf24' : '#22c55e'))
+                              : '#94a3b8')
+                      }}>
+                        {riskReport 
+                          ? riskReport.severity 
+                          : (currentData 
+                              ? (currentData.hectares > 1000 
+                                  ? 'HIGH' 
+                                  : (currentData.hectares > 300 ? 'MEDIUM' : 'LOW'))
+                              : 'N/A')}
+                      </p>
                     </div>
                   </div>
 
@@ -465,14 +553,36 @@ function App() {
                     <h2 style={{fontSize: '18px', marginBottom: '10px'}}>Temporal Trends</h2>
                     <div style={{ width: '100%', height: 180 }}>
                       <ResponsiveContainer>
-                        <AreaChart data={erosionStats}>
+                        <BarChart data={erosionStats} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
                           <XAxis dataKey="year" stroke="#94a3b8" fontSize={10}/>
                           <YAxis stroke="#94a3b8" fontSize={10}/>
-                          <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px' }} />
-                          <Area type="monotone" dataKey="hectares" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} />
-                        </AreaChart>
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px' }}
+                            labelStyle={{ color: '#fff', fontWeight: 'bold' }}
+                            itemStyle={{ color: '#fff' }}
+                            formatter={(value, name) => [
+                              `${value > 0 ? '+' : ''}${value} Ha`, 
+                              value > 0 ? 'Erosion Loss' : 'Accretion Gain'
+                            ]}
+                          />
+                          <ReferenceLine y={0} stroke="#475569" />
+                          <Bar dataKey="raw_delta_ha">
+                            {erosionStats.map((entry, index) => {
+                              const isErosion = entry.raw_delta_ha > 0;
+                              return (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={isErosion ? '#ef4444' : '#38bdf8'} 
+                                />
+                              );
+                            })}
+                          </Bar>
+                        </BarChart>
                       </ResponsiveContainer>
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '8px', textAlign: 'center', lineHeight: '1.4' }}>
+                      📈 <strong>Legend:</strong> <span style={{ color: '#ef4444' }}>Positive values</span> = land eroded (hectares lost) | <span style={{ color: '#38bdf8' }}>Negative values</span> = land gained (sandbar/char accretion)
                     </div>
 
                     <div className="metadata-box" style={{marginTop: '25px', fontSize: '12px', color: '#94a3b8', background: '#1e293b', padding: '15px', borderRadius: '8px'}}>
@@ -519,6 +629,34 @@ function App() {
                   </div>
                 </>
               )}
+
+              {resourcePlan && resourcePlan.applicable === true && (
+                <div className="panel-card" style={{ marginTop: '20px', borderLeft: '4px solid #10b981' }}>
+                  <h2 style={{ fontSize: '18px', marginBottom: '15px', color: '#10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    🛡️ Mitigation Action Plan
+                  </h2>
+                  <div className="stats-grid" style={{ marginBottom: '15px' }}>
+                    <div className="stat-card">
+                      <h4>Geo-Bags Required</h4>
+                      <p>{resourcePlan.geo_bags_required ? resourcePlan.geo_bags_required.toLocaleString() : 0}</p>
+                    </div>
+                    <div className="stat-card">
+                      <h4>Bamboo Required</h4>
+                      <p>{resourcePlan.bamboo_tons_required ? `${resourcePlan.bamboo_tons_required} Tons` : '0 Tons'}</p>
+                    </div>
+                    <div className="stat-card" style={{ gridColumn: 'span 3' }}>
+                      <h4>Estimated Budget</h4>
+                      <p style={{ color: '#10b981', fontSize: '20px', fontWeight: 'bold' }}>
+                        ₹{resourcePlan.estimated_budget_lakhs ? resourcePlan.estimated_budget_lakhs.toFixed(2) : '0.00'} Lakhs
+                      </p>
+                    </div>
+                  </div>
+                  <div className="metadata-box" style={{ fontSize: '12px', color: '#cbd5e1', background: '#1e293b', padding: '15px', borderRadius: '8px', borderLeft: '2px solid #10b981' }}>
+                    <strong style={{ color: 'white' }}>Action Summary:</strong><br/><br/>
+                    {resourcePlan.action_summary}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -536,6 +674,30 @@ function App() {
       {!currentLocation.toLowerCase().includes('majuli') && (
         <div className="global-context-banner">
           Global Telemetry Mode: The high-resolution historical erosion zones, flood inundation maps, and temporal trend datasets are exclusively localized to the Majuli Island research scope. You are currently viewing live, real-time Earth Engine satellite telemetry for {currentLocation}.
+        </div>
+      )}
+
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          backgroundColor: '#1e293b',
+          border: '1px solid #38bdf8',
+          borderRadius: '8px',
+          padding: '12px 20px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          animation: 'slideIn 0.3s ease-out'
+        }}>
+          <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '14px' }}>
+            ✅ {toast.recipient} Notified
+          </span>
+          <span style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
+            Sent at {new Date(toast.timestamp).toLocaleTimeString()}
+          </span>
         </div>
       )}
       
