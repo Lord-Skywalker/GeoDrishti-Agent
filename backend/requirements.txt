@@ -24,3 +24,6 @@ uvicorn==0.49.0
 
 # Google Earth Engine Integration
 earthengine-api==1.7.33
+
+# WhiteNoise for production static file serving
+whitenoise==6.8.2

@@ -74,9 +74,22 @@ def get_gee_satellite_metrics(latitude: float, longitude: float) -> str:
         import base64
         import tempfile
         
-        # Check if GEE credentials are provided in base64 format via environment variable
+        # Check GEE service account credentials from environment variables
+        gee_secret_json = os.environ.get("GEE_SERVICE_ACCOUNT_KEY")
         gee_creds_b64 = os.environ.get("GEE_CREDENTIALS_BASE64")
-        if gee_creds_b64:
+        
+        if gee_secret_json:
+            # Parse service account JSON directly from Secret Manager environment variable (in-memory)
+            try:
+                import json
+                info = json.loads(gee_secret_json)
+                creds = service_account.Credentials.from_service_account_info(
+                    info,
+                    scopes=["https://www.googleapis.com/auth/earthengine"]
+                )
+            except Exception as err:
+                return json.dumps({"error": f"Failed to load credentials from GEE_SERVICE_ACCOUNT_KEY: {str(err)}"})
+        elif gee_creds_b64:
             # Decode and write to a temporary file
             try:
                 creds_json = base64.b64decode(gee_creds_b64).decode("utf-8")
@@ -103,7 +116,7 @@ def get_gee_satellite_metrics(latitude: float, longitude: float) -> str:
             base_dir = os.path.dirname(os.path.abspath(__file__))
             creds_path = os.path.join(base_dir, "gee-credentials.json")
             if not os.path.exists(creds_path):
-                return json.dumps({"error": f"Credentials file not found at {creds_path} and GEE_CREDENTIALS_BASE64 is not set."})
+                return json.dumps({"error": f"Credentials file not found at {creds_path} and GEE environment variables are not set."})
             
             # Load credentials from file
             creds = service_account.Credentials.from_service_account_file(

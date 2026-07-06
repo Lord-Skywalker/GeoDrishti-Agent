@@ -1,0 +1,36 @@
+# Ignore local virtual environments
+.venv/
+venv/
+backend/venv/
+
+# Ignore node packages
+node_modules/
+**/node_modules/
+
+# Ignore git assets
+.git/
+.gitignore
+
+# Ignore build and cache directories
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+frontend/dist/
+dist/
+
+# Ignore secret keys and configs
+.env
+.env.*
+gee-credentials.json
+
+# Ignore frontend source directory (deploys separately to Firebase)
+frontend/
+
+# Ignore local scratch / log files
+scratch/
+*.log
+.vscode/
+.idea/
+.DS_Store
