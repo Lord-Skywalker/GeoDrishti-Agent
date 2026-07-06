@@ -163,5 +163,5 @@ The historical database stats (2018–2025) for Majuli Island are stored in the 
 
 ## 🔮 Future Directions
 
-* **Brahmaputra Valley Expansion:** The architecture is region-agnostic. By replacing the static polygon files and extending database bounds, the system could easily monitor Kaziranga, Dibrugarh, or the entire Brahmaputra Valley.
+* **Brahmaputra and Barak Valley Expansion:** The architecture is region-agnostic. By replacing the static polygon files and extending database bounds, the system could easily monitor Kaziranga, Dibrugarh, the Barak Valley or the entire Brahmaputra Valley.
 * **SendGrid/SMTP Integration:** The dispatch system is simulated for prototype demo reliability; the underlying architecture can easily hook into a transactional mailer client in production.
