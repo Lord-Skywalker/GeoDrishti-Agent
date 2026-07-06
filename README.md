@@ -1,6 +1,6 @@
 # GeoDrishti: Autonomous Multi-Agent Geospatial Assistant
 
-GeoDrishti is an AI-first, autonomous multi-agent geospatial assistant designed to simplify and automate the monitoring of riverine bankline erosion, seasonal flooding patterns, and real-time vegetation/water indexes on **Majuli Island, Assam, India** (the world's largest river island). Developed as a research prototype under **NIT Silchar Research** by **Anubhav (2315094)**, this workspace implements a consolidated geospatial stack comprising a React-based interactive visualizer, a Django REST Framework backend, a local Model Context Protocol (MCP) server wrapping SQLite metrics, and a multi-agent orchestration pipeline powered by the **Google Agentic Design Kit (ADK)** and the Gemini API.
+GeoDrishti is an AI-first, autonomous multi-agent geospatial assistant designed to simplify and automate the monitoring of riverine bankline erosion, seasonal flooding patterns, and real-time vegetation/water indexes on **Majuli Island, Assam, India** (the world's largest river island). Developed as a research prototype under **NIT Silchar Research** by **Anubhav**, this workspace implements a consolidated geospatial stack comprising a React-based interactive visualizer, a Django REST Framework backend, a local Model Context Protocol (MCP) server wrapping SQLite metrics, and a multi-agent orchestration pipeline powered by the **Google Agentic Design Kit (ADK)** and the Gemini API.
 
 ---
 
