@@ -19,13 +19,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
+import os
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-5@1+(a6c9@_)7_i2hom0*vjaxk!b0-rgw^2ey969p_yt@s3nv!"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-5@1+(a6c9@_)7_i2hom0*vjaxk!b0-rgw^2ey969p_yt@s3nv!")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '.onrender.com',
+]
+
+# Allow additional hosts from environment variable
+allowed_hosts_env = os.environ.get("ALLOWED_HOSTS")
+if allowed_hosts_env:
+    ALLOWED_HOSTS.extend(allowed_hosts_env.split(","))
 
 
 # Application definition
@@ -123,5 +134,13 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 # --- CORS SETTINGS ---
-# This tells Django it is safe to accept requests from anywhere (like your Vercel frontend)
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+# Allow additional origins from environment variable (like the Vercel frontend URL)
+cors_origins_env = os.environ.get("CORS_ALLOWED_ORIGINS")
+if cors_origins_env:
+    CORS_ALLOWED_ORIGINS.extend(cors_origins_env.split(","))

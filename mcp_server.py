@@ -71,15 +71,45 @@ def get_gee_satellite_metrics(latitude: float, longitude: float) -> str:
     from google.oauth2 import service_account
     
     try:
-        # Resolve credential path relative to this file's directory
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        creds_path = os.path.join(base_dir, "gee-credentials.json")
+        import base64
+        import tempfile
         
-        # Load credentials
-        creds = service_account.Credentials.from_service_account_file(
-            creds_path,
-            scopes=["https://www.googleapis.com/auth/earthengine"]
-        )
+        # Check if GEE credentials are provided in base64 format via environment variable
+        gee_creds_b64 = os.environ.get("GEE_CREDENTIALS_BASE64")
+        if gee_creds_b64:
+            # Decode and write to a temporary file
+            try:
+                creds_json = base64.b64decode(gee_creds_b64).decode("utf-8")
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="w", encoding="utf-8")
+                temp_file.write(creds_json)
+                temp_file.close()
+                creds_path = temp_file.name
+                
+                # Load credentials
+                creds = service_account.Credentials.from_service_account_file(
+                    creds_path,
+                    scopes=["https://www.googleapis.com/auth/earthengine"]
+                )
+                
+                # Clean up the temp file immediately as the credentials are loaded in memory
+                try:
+                    os.unlink(creds_path)
+                except Exception:
+                    pass
+            except Exception as err:
+                return json.dumps({"error": f"Failed to load credentials from GEE_CREDENTIALS_BASE64: {str(err)}"})
+        else:
+            # Resolve credential path relative to this file's directory
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            creds_path = os.path.join(base_dir, "gee-credentials.json")
+            if not os.path.exists(creds_path):
+                return json.dumps({"error": f"Credentials file not found at {creds_path} and GEE_CREDENTIALS_BASE64 is not set."})
+            
+            # Load credentials from file
+            creds = service_account.Credentials.from_service_account_file(
+                creds_path,
+                scopes=["https://www.googleapis.com/auth/earthengine"]
+            )
         ee.Initialize(creds)
         
         point = ee.Geometry.Point(longitude, latitude)

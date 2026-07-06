@@ -89,6 +89,9 @@ function App() {
 
   // Helper to dynamically resolve backend host based on current environment
   const getApiUrl = (path) => {
+    if (import.meta.env.VITE_API_BASE_URL) {
+      return `${import.meta.env.VITE_API_BASE_URL}${path}`;
+    }
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const host = isLocal ? 'http://127.0.0.1:8000' : 'https://geodrishti-backend.onrender.com';
     return `${host}${path}`;
