@@ -50,7 +50,6 @@ This document tracks the progress, implementation phases, verification status, a
 ---
 
 ## Key Decisions & Architecture
-- **Workspace Copy:** Copied code from `D:\CODES\bhoomi-backend` and `D:\CODES\bhoomi-dashboard` into the workspace as `backend/` and `frontend/` to consolidate the production stack in our active workspace.
 - **FastMCP Stdio Transport:** Used `fastmcp` to expose Django's ORM database queries as standard MCP tools. Spun up the server as a subprocess from the ADK validation node via `mcp.client.stdio` transport.
 - **Dynamic Insight Loop:** Wired the React frontend to parse the agent's final `gis_params` response. If a matching end year is parsed from the query, the year slider and Leaflet geospatial overlays dynamically transition to that year instantly.
 
