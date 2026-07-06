@@ -361,7 +361,15 @@ function App() {
       {/* AGENT CHAT TOGGLE BUTTON */}
       <button 
         className={`agent-drawer-toggle-btn ${isAgentDrawerOpen ? 'drawer-open' : ''}`} 
-        onClick={() => setIsAgentDrawerOpen(!isAgentDrawerOpen)}
+        onClick={() => {
+          setIsAgentDrawerOpen(prev => {
+            const next = !prev;
+            if (next && window.innerWidth < 768) {
+              setIsPanelOpen(false);
+            }
+            return next;
+          });
+        }}
       >
         🛰️ {isAgentDrawerOpen ? 'Close Drawer' : 'Ask Copilot'}
       </button>
@@ -490,9 +498,14 @@ function App() {
         </div>
       )}
 
-      {/* TOGGLE BUTTON & SIDE PANEL */}
       <button className={`panel-toggle-btn ${isPanelOpen ? 'panel-open' : ''}`} onClick={() => {
-        setIsPanelOpen(!isPanelOpen);
+        setIsPanelOpen(prev => {
+          const next = !prev;
+          if (next && window.innerWidth < 768) {
+            setIsAgentDrawerOpen(false);
+          }
+          return next;
+        });
         setIsDownloadMenuOpen(false); // Close dropdown if panel closes
       }}>
         {isPanelOpen ? '✕' : '☰'}

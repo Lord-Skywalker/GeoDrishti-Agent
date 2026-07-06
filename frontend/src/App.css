@@ -32,7 +32,7 @@ body {
   position: absolute;
   top: 20px;
   left: 20px;
-  z-index: 1000;
+  z-index: 1008; /* Always visible above toggle buttons */
   background: rgba(15, 23, 42, 0.9);
   padding: 15px 25px;
   border-radius: 8px;
@@ -94,7 +94,7 @@ body {
   position: absolute;
   top: 20px;
   right: 20px;
-  z-index: 1006; /* Above the panel so you can always click it */
+  z-index: 1001; /* Above the map, but below headers and open panels */
   background-color: #1e293b;
   border: 1px solid #334155;
   color: white;
@@ -116,6 +116,7 @@ body {
 .side-panel:not(.collapsed) ~ .panel-toggle-btn,
 .panel-toggle-btn.panel-open {
   right: 420px; /* Panel width (400) + 20px padding */
+  z-index: 1006; /* Elevated z-index when open to overlay the panel */
 }
 
 /* 5. DOWNLOAD TIMELAPSE MENU */
@@ -262,7 +263,7 @@ body {
   position: absolute;
   top: 120px; /* Sits cleanly below the header */
   left: 20px;
-  z-index: 1000; /* Layered below the side panel */
+  z-index: 1007; /* Above map controls and toggle buttons */
   background: rgba(15, 23, 42, 0.9);
   padding: 15px;
   border-radius: 8px;
@@ -363,9 +364,10 @@ body {
     font-size: 11px;
   }
 
-  /* 5. Ensure bottom bar fits nicely on phone */
+  /* 5. Ensure bottom bar fits nicely on phone and sits at the top (top-24) below header */
   .floating-bottom-bar {
-    bottom: 20px;
+    top: 96px;
+    bottom: auto;
     padding: 10px 20px;
   }
 
@@ -374,9 +376,9 @@ body {
     bottom: 90px !important;
   }
 
-  /* 7. Mobile Legend Fix: Sit on the left right under header, beneath Side Panel */
+  /* 7. Mobile Legend Fix: Sit on the left below the header and year slider, clear of collisions */
   .map-legend {
-    top: 90px;
+    top: 170px;
     left: 15px;
     width: 180px;
     padding: 10px;
@@ -412,7 +414,7 @@ body {
   position: absolute;
   top: 365px;
   left: 20px;
-  z-index: 1006;
+  z-index: 1001; /* Above map, below header/panels */
   background-color: #1e293b;
   border: 1px solid #38bdf8;
   color: #38bdf8;
@@ -437,6 +439,7 @@ body {
 .agent-drawer-toggle-btn.drawer-open {
   left: 400px;
   top: 365px;
+  z-index: 1006; /* Elevated z-index when open to overlay the drawer */
 }
 
 .floating-header.shifted, .map-legend.shifted {
@@ -626,7 +629,10 @@ body {
     width: 100vw;
   }
   .agent-drawer-toggle-btn.drawer-open {
-    left: 20px;
+    left: auto;
+    right: 20px;
+    top: 20px;
+    z-index: 1006;
   }
   .floating-header.shifted, .map-legend.shifted {
     left: 15px;
