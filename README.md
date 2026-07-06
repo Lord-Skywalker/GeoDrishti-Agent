@@ -1,144 +1,167 @@
 # GeoDrishti: Autonomous Multi-Agent Geospatial Assistant
 
-GeoDrishti is an AI-first, Autonomous Multi-Agent Geospatial Assistant designed to simplify and automate the monitoring of riverine erosion and seasonal flooding patterns on **Majuli Island, Assam, India** (the world's largest river island).
-
-This workspace holds the complete Capstone Project implementation: a production-ready stack comprising a React-based interactive geospatial visualizer, a Django REST Framework backend with spatial endpoints, a local Model Context Protocol (MCP) server wrapping database metrics, and an agent layer powered by the **Google Agentic Design Kit (ADK)** and the Gemini API.
+GeoDrishti is an AI-first, autonomous multi-agent geospatial assistant designed to simplify and automate the monitoring of riverine bankline erosion, seasonal flooding patterns, and real-time vegetation/water indexes on **Majuli Island, Assam, India** (the world's largest river island). Developed as a research prototype under **NIT Silchar Research** by **Anubhav (2315094)**, this workspace implements a consolidated geospatial stack comprising a React-based interactive visualizer, a Django REST Framework backend, a local Model Context Protocol (MCP) server wrapping SQLite metrics, and a multi-agent orchestration pipeline powered by the **Google Agentic Design Kit (ADK)** and the Gemini API.
 
 ---
 
-## 1. Problem Statement
-Majuli Island faces extreme geomorphological changes due to seasonal monsoon flooding and rapid soil erosion along the Brahmaputra River. 
-Traditionally, assessing risk factors requires:
-1. Manually toggling layer configurations (SAR flood extents, DEM slopes, NDVI vegetation density).
-2. Manually calculating temporal land loss percentages.
-3. Engaging specialized GIS analysts to interpret raster metrics.
+## 🚀 Key Features
 
-**GeoDrishti solves this manual overhead** by introducing a conversational agent layer directly on top of the map. Users query the dashboard in natural language, and the system dynamically retrieves backend statistics, interprets anomalies, suggests risk severity levels, and snaps the visual map layers to the relevant epochs automatically.
-
----
-
-## 2. Solution Overview
-The GeoDrishti Agent Layer consists of three core components:
-1. **Agent Chat Drawer (React UI):** A sliding workspace side drawer providing quick action buttons, loading indicators, and markdown chat bubbles. It coordinates the visual state of the map based on the agent's insights.
-2. **Multi-Agent Orchestration (Google ADK):** A sequential pipeline containing:
-   - **Agent A (GIS Operator):** Translates natural language requests into structured GIS API parameters (date ranges, coordinates, target indices).
-   - **Agent B (Environmental Analyst):** Reviews the gathered metrics, highlights anomalies, and generates comprehensive risk assessments.
-3. **Model Context Protocol (MCP) Server:** A Python stdio FastMCP server wrapping Django database models. The ADK workflow queries the MCP server dynamically to pull historical erosion statistics.
+* **Three-Agent Orchestration Pipeline:** Natural language requests are parsed, validated, analyzed, and planned sequentially by three specialized agents (GIS Operator $\rightarrow$ Environmental Analyst $\rightarrow$ Resource Planner).
+* **Real Satellite-Derived Historical Data:** Displays actual bankline erosion maps and SAR flood inundation polygons (2018–2025) derived from Sentinel-2 dry-season water-boundary analysis.
+* **Dual Analysis Modes (Local vs. Global):** Connects to localized historical database records for Majuli Island, and automatically switches to live Google Earth Engine telemetry (NDVI/NDWI) for any global coordinates.
+* **Automated Mitigation Action Plans:** Dynamically estimates mitigation material requirements (geo-bags, bamboo tons, and INR budget) based on deterministic land loss calculations.
+* **Simulated Emergency Dispatch:** Enables users to conversationalize emergency notifications (e.g. "email this report to DDMA"), triggers a mock transactional dispatch service, and displays Toast alert notifications.
+* **Dynamic Visualization Loop:** Automatically flies Leaflet maps to coordinates, updates time timeline sliders, and adapts UI layout states dynamically based on the agent's parsed parameters.
 
 ---
 
-## 3. System Architecture & Flow
+## 🏗️ System Architecture & Workflow
 
 ```
-+------------------+     User Query     +-----------------------------+
-|  React Frontend  | -----------------> |       Django Backend        |
-|  (Chat Drawer)   | <----------------- |    (api/views.py endpoint)  |
-+------------------+    Final Report    +-----------------------------+
-         ^                                             |
-         |                                             v
-         |                              +-----------------------------+
-         |                              |     Google ADK Workflow     |
-         |                              +-----------------------------+
-         |                                             |
-         |  Dynamic map sync                           v
-         |  (setSelectedYear)           +-----------------------------+
-         |                                | 1. Input Sanitization Gate  |
-         |                                +-----------------------------+
-         |                                             |
-         |                                             v
-         |                              +-----------------------------+
-         |                              |   2. Agent A (GIS Operator) |
-         |                              +-----------------------------+
-         |                                             |
-         |                                             v
-         |                              +-----------------------------+
-         |                              | 3. Bounds-Check & Capping   |
-         |                              +-----------------------------+
-         |                                             |
-         |                                             v
-         |                              +-----------------------------+
-         |                              |   4. MCP Server Subprocess  |
-         |                              |      (Stdio JSON-RPC)       |
-         |                              +-----------------------------+
-         |                                             |
-         |                                             v
-         |                              +-----------------------------+
-         |                              |   5. Django SQLite Database |
-         |                              +-----------------------------+
-         |                                             |
-         |                                             v
-         |                              +-----------------------------+
-         |                              | 6. Agent B (Env. Analyst)   |
-         |                              +-----------------------------+
++-------------------+      User Query       +-------------------------------+
+|   React Frontend  | --------------------> |         Django Backend        |
+|   (Chat Drawer)   | <-------------------- |     (api/views.py Endpoint)   |
++-------------------+     Final Response    +-------------------------------+
+          ^                                                 |
+          |                                                 v
+          |                                  +------------------------------+
+          |                                  |     Google ADK Workflow      |
+          |                                  +------------------------------+
+          |                                                 |
+          |                                                 v
+          |                                  +------------------------------+
+          |                                  |  1. Input Sanitization Gate  |
+          |                                  +------------------------------+
+          |                                                 |
+          |                                                 v
+          |                                  +------------------------------+
+          |                                  |   2. Agent A (GIS Operator)  |
+          |                                  +------------------------------+
+          |                                                 |
+          |                                                 v
+          |                                  +------------------------------+
+          |                                  |   3. Bounds-Check & Capping  |
+          |                                  +------------------------------+
+          |                                                 |
+          |                                                 v
+          |                                  +------------------------------+
+          |                                  |   4. MCP Server Subprocess   |
+          |                                  |     (Stdio JSON-RPC Client)  |
+          |                                  +------------------------------+
+          |                                                 |
+          |                                                 v
+          |                                  +------------------------------+
+          |                                  |   5. Agent B (Env. Analyst)  |
+          |                                  +------------------------------+
+          |                                                 |
+          |                                                 v
+          |                                  +------------------------------+
+          |                                  |  6. Agent C (Resource Plan)  |
+          |                                  +------------------------------+
 ```
 
-### End-to-End Execution Sequence
-1. The user asks a question in the chat drawer (e.g., *"Show me the erosion risk for Garmur in 2023"*).
-2. The request hits the Django view `/api/agent-chat/` which kicks off the Google ADK workflow.
-3. **Sanitization Gate:** Checks for prompt injection keywords. If clean, passes to Agent A.
-4. **Agent A (GIS Operator):** Extracts parameters like dates (`2023-01-01` to `2023-12-31`), coordinates, and required indices (`['Erosion']`).
-5. **Validation & Capping Gate:** Checks if coordinates lie within Majuli Island bounding box. Clamps date ranges exceeding 5 years.
-6. **MCP Client Session:** Launches `mcp_server.py` in a stdio subprocess, invokes `get_erosion_stats` and `get_gis_config` tools, and fetches raw Django SQLite stats.
-7. **Agent B (Environmental Analyst):** Evaluates the database metrics, flags anomalies, and formats a structured `RiskReport` JSON (severity, findings, narrative).
-8. **Frontend Sync:** The frontend displays the report and automatically sets `selectedYear` to `2023`, instantly showing the corresponding high-risk red polygons on the Leaflet map.
+### The Three-Agent Pipeline
+1. **Agent A (GIS Operator):** Translates user queries into structured geospatial parameter bounds (`GISParams`). Handles clamping temporal scopes (max 5 years) and mapping locations to coordinates. If a query is gibberish or off-topic, it returns a clarification warning.
+2. **Agent B (Environmental Analyst):** Reviews GEE indices (NDVI/NDWI) and database metrics. Produces a formal `RiskReport`. It enforces separation between historical database metrics and live telemetry snapshots, aggregates multi-year statistics correctly, and maps the output to a Python-computed severity.
+3. **Agent C (Resource Planner):** Generates `ResourcePlan` estimates. If queries are global live-telemetry, it bypasses calculations. Otherwise, it calls `calculate_mitigation_cost` to estimate material and budgets.
+
+### Reliability & Security Guardrails
+* **Prompt Injection Sanitizer:** Scans natural language queries for injection signatures (e.g. `"ignore instructions"`, `"system prompt"`). If flagged, it aborts execution early.
+* **Off-Topic / Gibberish Clarification:** If Agent A cannot identify any place or coordinate, the system skips all GEE/database queries and returns a clarification request, cleanly wiping all prior analysis states.
+* **Deterministic Severity Rule:** The backend calculates severity using a fixed Python threshold on total hectares lost:
+  * `hectares_lost > 1000` $\rightarrow$ `"HIGH"`
+  * `hectares_lost > 300` $\rightarrow$ `"MEDIUM"`
+  * `hectares_lost >= 0` $\rightarrow$ `"LOW"`
+  Agent B is strictly instructed to map its output severity to this computed severity.
+* **Session Leak Protection:** The ADK engine utilizes a merge-delta model for session state updates. All short-circuit and early-exit paths explicitly clear previous analysis data (`risk_report`, `resource_plan`, `mcp_payload`, `dispatch_confirmation` set to `None`), preventing data leakage between consecutive queries in a single session.
 
 ---
 
-## 4. Graded Security Guardrails
-We have implemented real, programmatically enforced security gates inside [agent.py](file:///D:/agy2-projects/Geodrishti-geospatial-agent/agent.py) to prevent crash loops and database exposure:
+## 📊 Data & Methodology
 
-- **Input Sanitization:** Intercepts input strings in the `sanitize_input` node. Blocks queries containing prompt injection sequences (e.g., `"ignore instructions"`, `"bypass validation"`), returning a `security_flagged` status.
-- **Coordinate Bounding:** Strictly bounds coordinate queries to Majuli Island coordinates: Latitude `[26.70, 27.20]` and Longitude `[93.80, 94.70]` (with a safe margin). Requests outside this box are immediately rejected before querying the backend.
-- **Date Range Restrictions:** Date ranges must fall strictly within `[2018-01-01]` and `[2026-12-31]` (reflecting actual satellite observation assets).
-- **Query Capping:** Any query spanning a temporal range greater than 5 years is dynamically clamped to exactly 5 years from its start date to protect the backend from heavy database sweeps.
+The historical database stats (2018–2025) for Majuli Island are stored in the Django backend sqlite database.
+* **Methodology:** The water boundaries are derived from Google Earth Engine Sentinel-2 dry-season (January–March) NDWI median composite overlays. By focusing on the dry season, the system isolates long-term geomorphological soil erosion from temporary seasonal monsoon inundation.
+* **Erosion vs. Accretion:** In the `ErosionData` model, `hectares` captures erosion-only land loss. The signed variable `raw_delta_ha` tracks the net water-area change (positive values indicate net land lost to water erosion, while negative values capture sandbar emergence and vegetation gain—accretion).
 
 ---
 
-## 5. Local Setup & Installation
+## 🛠️ Tech Stack
+
+* **Frontend:** React 19.2.4 (JSX), Vite 8.0.1 (Bundler), Leaflet 1.9.4 & React-Leaflet 5.0.0 (Geospatial maps), Recharts 3.8.1 (Charts).
+* **Backend:** Django 6.0.6, Django REST Framework 3.17.1, SQLite.
+* **AI & Agentic Layer:** Google Agentic Design Kit (ADK) 2.3.0, Gemini 3.1 Flash Lite API.
+* **MCP Integration:** FastMCP 3.4.2 (Stdio JSON-RPC).
+* **GIS Telemetry:** Google Earth Engine Python API.
+
+---
+
+## ⚙️ Setup and Installation
 
 ### Prerequisites
-- Python 3.11 or higher
-- Node.js v18 or higher
-- A Google Gemini API Key (obtained from [Google AI Studio](https://aistudio.google.com/))
+* Python 3.11 or higher
+* Node.js v18 or higher
+* A Gemini API Key ([obtain here](https://aistudio.google.com/))
+* A Google Earth Engine Service Account private key JSON file.
 
-### Step 1: Clone and Configure Environment
-Copy `.env.example` to `.env` in the root folder and add your Gemini API Key:
-```bash
-cp .env.example .env
-```
-Inside `.env`:
-```env
-GEMINI_API_KEY=AIzaSyYourGeminiApiKeyHere
-```
+### 1. Configure Credentials
+1. Copy `.env.example` to `.env` in the project root:
+   ```bash
+   cp .env.example .env
+   ```
+   Add your API key inside `.env`:
+   ```env
+   GEMINI_API_KEY=AIzaSyYourGeminiApiKeyHere
+   ```
+2. Place your Google Earth Engine service account key file in the root of the workspace under the filename:
+   `gee-credentials.json`
+   *(This filename is explicitly gitignored in `.gitignore` to prevent secret leakage)*.
 
-### Step 2: Install Backend Dependencies
-Set up your virtual environment and install the requirements:
-```bash
-python -m venv .venv
-.venv\Scripts\activate      # On Linux/macOS: source .venv/bin/activate
-pip install -r backend/requirements.txt
-```
+### 2. Configure & Run Backend
+1. Create a virtual environment and install requirements:
+   ```bash
+   python -m venv .venv
+   .venv\Scripts\activate      # On Linux/macOS: source .venv/bin/activate
+   pip install -r backend/requirements.txt
+   ```
+2. Run database migrations:
+   ```bash
+   python backend/manage.py migrate
+   ```
+3. Start the Django API backend:
+   ```bash
+   python backend/manage.py runserver
+   ```
+   The backend API runs on `http://127.0.0.1:8000`.
 
-### Step 3: Run the Django API & MCP Server
-Start the Django backend local server. It serves both the stats REST endpoints and wraps the ADK workflows:
-```bash
-python backend/manage.py runserver
-```
-The backend server runs locally on `http://127.0.0.1:8000`.
-
-### Step 4: Run the React Frontend
-Open a new terminal window:
-```bash
-cd frontend
-npm install
-npm run dev
-```
-The React development server runs locally on `http://localhost:5173`. Open this URL in your web browser. Click the **"Ask Copilot"** button in the top left to open the agent chat drawer and start interacting!
+### 3. Configure & Run Frontend
+1. Navigate to the frontend folder, install dependencies, and run:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   The React dashboard runs on `http://localhost:5173`. Open this URL, click **"Ask Copilot"**, and start querying.
 
 ---
 
-## 6. Project Verification Status
-All phases have been fully tested and verified locally:
-- **FastMCP Server Verification:** Handshake and JSON-RPC tool calls completed successfully.
-- **ADK Workflow Verification:** Correctly parsed queries, validated coordinates, fetched SQLite metrics, and produced structured analyst reports.
-- **Frontend Compilation:** Vite successfully built assets (`npm run build`) without compilation or package import issues.
+## 💡 Usage Examples
+
+* **Local Erosion Analysis:** 
+  > *"Show me erosion risk for Majuli region in 2020"*
+  * Demonstrates local historical database statistics fetch. Synced year range is mapped, the status card shows "HIGH", and the mitigation plan is calculated for 1751.84 hectares.
+* **Multi-Year Trend Analysis:** 
+  > *"Show me historical trends for Majuli from 2018 to 2022"*
+  * Demonstrates multi-year temporal aggregation. The Analyst agent summarizes individual erosion/accretion years, maps cumulative loss to 1872.97 hectares, and triggers corresponding mitigation geo-bag allocations.
+* **Global Live Telemetry:** 
+  > *"Show me flood risk near Tokyo"*
+  * Demonstrates global mode. The map flies to Tokyo, skips database stats (localized only to Majuli), queries Earth Engine Sentinel-2 imagery live, and returns rounded coordinates, scene date, NDVI, and NDWI.
+* **Emergency Dispatcher:** 
+  > *"email this report to the District Disaster Management Authority"*
+  * Demonstrates dispatch capability. Simulates email dispatch, updates session status, and pops up a confirmation Toast notification in the frontend.
+
+---
+
+## 🔮 Future Directions
+
+* **Brahmaputra Valley Expansion:** The architecture is region-agnostic. By replacing the static polygon files and extending database bounds, the system could easily monitor Kaziranga, Dibrugarh, or the entire Brahmaputra Valley.
+* **SendGrid/SMTP Integration:** The dispatch system is simulated for prototype demo reliability; the underlying architecture can easily hook into a transactional mailer client in production.
