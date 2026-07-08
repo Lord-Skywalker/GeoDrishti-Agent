@@ -636,6 +636,9 @@ body {
   .floating-header.shifted, .map-legend.shifted {
     left: 15px;
   }
+  .hide-slider-mobile {
+    display: none !important;
+  }
 }
 
 .global-context-banner {
