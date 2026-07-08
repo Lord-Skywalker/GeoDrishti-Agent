@@ -241,7 +241,7 @@ function App() {
         setIsChatLoading(false);
         setMessages(prev => [...prev, {
           sender: 'system-error',
-          text: `Error contacting agent layer: ${err.message}. Make sure the backend Django server is running locally.`
+          text: 'Please refresh the page and try again once or twice. The backend is waking up and loading.'
         }]);
       });
   };
